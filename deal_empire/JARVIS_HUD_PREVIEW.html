@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>⚡ JARVIS MARK-85 // 3D HOLOGRAPHIC MISSION CONTROL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Share+Tech+Mono&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --cyan: #00f0ff;
+            --cyan-bright: #70ffff;
+            --cyan-glow: rgba(0, 240, 255, 0.6);
+            --cyan-dim: rgba(0, 240, 255, 0.15);
+            --dark-void: #000408;
+            --panel-glass: rgba(1, 14, 26, 0.75);
+            --red-glow: #ff0055;
+            --gold-glow: #ffb700;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+
+        body {
+            background-color: var(--dark-void);
+            color: var(--cyan);
+            font-family: 'Share Tech Mono', monospace;
+            min-height: 100vh;
+            overflow: hidden;
+            perspective: 1200px;
+            cursor: crosshair;
+        }
+
+        /* 3D WebGL Canvas Layer (Full Screen Background) */
+        #webgl-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Scanline and Vignette Film Overlay */
+        .film-overlay {
+            position: fixed;
+            top:0; left:0; width:100vw; height:100vh;
+            background: 
+                radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.85) 100%),
+                linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.35) 50%);
+            background-size: 100% 100%, 100% 4px;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Parallax 3D HUD Layer */
+        .hud-world {
+            position: relative;
+            z-index: 10;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px 30px;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+        }
+
+        /* Top HUD Bar */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 28px;
+            background: rgba(2, 12, 22, 0.85);
+            border: 1px solid var(--cyan-glow);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.25), inset 0 0 15px var(--cyan-dim);
+            border-radius: 4px;
+            position: relative;
+        }
+        header::before, header::after {
+            content: ""; position: absolute; width: 15px; height: 15px; border: 2px solid var(--cyan-bright);
+        }
+        header::before { top: -2px; left: -2px; border-right: none; border-bottom: none; }
+        header::after { bottom: -2px; right: -2px; border-left: none; border-top: none; }
+
+        .logo-box {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .logo-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 22px;
+            font-weight: 900;
+            letter-spacing: 4px;
+            color: #fff;
+            text-shadow: 0 0 15px var(--cyan), 0 0 30px var(--cyan);
+        }
+        .system-pill {
+            font-size: 11px;
+            padding: 4px 12px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--cyan);
+            border-radius: 20px;
+            box-shadow: 0 0 10px var(--cyan-glow);
+            animation: pulsePill 1.8s infinite alternate;
+        }
+        @keyframes pulsePill {
+            from { opacity: 0.7; box-shadow: 0 0 5px var(--cyan-dim); }
+            to { opacity: 1; box-shadow: 0 0 18px var(--cyan); }
+        }
+
+        .audio-toggle-btn {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 14px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 0 10px var(--cyan-dim);
+        }
+        .audio-toggle-btn:hover {
+            background: var(--cyan);
+            color: #000;
+            box-shadow: 0 0 20px var(--cyan);
+        }
+
+        /* 3-Column Main Hologram Layout */
+        .hud-main {
+            display: grid;
+            grid-template-columns: 380px 1fr 420px;
+            gap: 25px;
+            height: calc(100vh - 170px);
+            align-items: stretch;
+        }
+
+        /* Holographic Glass Panes */
+        .hud-pane {
+            background: var(--panel-glass);
+            border: 1px solid rgba(0, 240, 255, 0.4);
+            border-radius: 6px;
+            padding: 20px;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.12), inset 0 0 25px rgba(0, 240, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            backdrop-filter: blur(8px);
+            overflow: hidden;
+        }
+        .hud-pane::before {
+            content: ""; position: absolute; top:0; left:0; width:100%; height:2px;
+            background: linear-gradient(90deg, transparent, var(--cyan-bright), transparent);
+            animation: paneSweep 4s linear infinite;
+        }
+        @keyframes paneSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+        .pane-header {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            border-bottom: 1px solid var(--cyan-dim);
+            padding-bottom: 10px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* LEFT PANE: Holographic 3D Circular Dials */
+        .gauge-section {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .holo-circle-dial {
+            width: 130px;
+            height: 130px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 2px solid var(--cyan-dim);
+            box-shadow: 0 0 20px var(--cyan-dim), inset 0 0 20px var(--cyan-dim);
+        }
+        .dial-ring-outer {
+            position: absolute; width: 146px; height: 146px; border-radius: 50%;
+            border: 2px dashed var(--cyan);
+            animation: spinCW 25s linear infinite;
+        }
+        .dial-ring-inner {
+            position: absolute; width: 110px; height: 110px; border-radius: 50%;
+            border: 2px dotted rgba(0, 240, 255, 0.6);
+            animation: spinCCW 15s linear infinite;
+        }
+        .dial-val {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 26px;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 0 15px var(--cyan);
+        }
+        .dial-label {
+            font-size: 10px;
+            letter-spacing: 1px;
+            color: var(--cyan-bright);
+            text-transform: uppercase;
+        }
+
+        .telemetry-row {
+            background: rgba(0, 240, 255, 0.05);
+            border-left: 3px solid var(--cyan);
+            padding: 9px 14px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            transition: 0.2s;
+        }
+        .telemetry-row:hover {
+            background: rgba(0, 240, 255, 0.15);
+            box-shadow: 0 0 15px var(--cyan-dim);
+        }
+        .telemetry-val {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 0 8px var(--cyan);
+        }
+
+        /* CENTER PANE: Hologram Focal Core & 21 Bot Conduits */
+        .center-pane {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            backdrop-filter: none;
+        }
+        .core-radar-hud {
+            position: absolute;
+            width: 360px; height: 360px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 240, 255, 0.25);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .radar-sweep-beam {
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, transparent 0deg, transparent 300deg, rgba(0, 240, 255, 0.35) 360deg);
+            animation: radarSpin 4s linear infinite;
+        }
+        @keyframes radarSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .bot-matrix-hud {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: var(--panel-glass);
+            border: 1px solid var(--cyan-glow);
+            border-radius: 6px;
+            padding: 14px;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);
+        }
+        .bot-grid-3d {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            max-height: 180px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .bot-cell {
+            background: rgba(0, 240, 255, 0.06);
+            border: 1px solid var(--cyan-dim);
+            padding: 5px 8px;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 2px;
+            transition: 0.2s;
+        }
+        .bot-cell:hover {
+            border-color: var(--cyan-bright);
+            box-shadow: 0 0 10px var(--cyan);
+            background: rgba(0, 240, 255, 0.2);
+        }
+        .cell-pulse {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 8px var(--cyan);
+            margin-right: 5px;
+            display: inline-block;
+        }
+
+        /* RIGHT PANE: Iron Man Target Lock Deck */
+        .target-deck {
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding-right: 6px;
+        }
+        .target-hud-box {
+            background: rgba(2, 18, 32, 0.85);
+            border: 1px solid var(--cyan);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.2), inset 0 0 15px rgba(0, 240, 255, 0.08);
+            border-radius: 4px;
+            padding: 15px;
+            position: relative;
+            animation: hudTargetAcquired 0.5s ease-out;
+        }
+        @keyframes hudTargetAcquired {
+            0% { transform: scale(0.85) rotateX(20deg); opacity: 0; }
+            100% { transform: scale(1) rotateX(0); opacity: 1; }
+        }
+        .bracket-tl { position: absolute; top:-3px; left:-3px; width:10px; height:10px; border-top:3px solid #fff; border-left:3px solid #fff; }
+        .bracket-br { position: absolute; bottom:-3px; right:-3px; width:10px; height:10px; border-bottom:3px solid #fff; border-right:3px solid #fff; }
+
+        .discount-pill {
+            background: var(--red-glow);
+            color: #fff;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 11px;
+            font-weight: 900;
+            padding: 4px 9px;
+            letter-spacing: 1px;
+            display: inline-block;
+            box-shadow: 0 0 15px rgba(255, 0, 85, 0.7);
+            margin-bottom: 8px;
+        }
+        .target-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 10px;
+            line-height: 1.35;
+        }
+        .price-hud-row {
+            display: flex;
+            gap: 12px;
+            align-items: baseline;
+            margin-bottom: 12px;
+        }
+        .price-current {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            font-weight: 900;
+            color: var(--cyan);
+            text-shadow: 0 0 15px var(--cyan);
+        }
+        .price-original {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.45);
+            text-decoration: line-through;
+        }
+        .lock-btn {
+            display: block;
+            width: 100%;
+            background: linear-gradient(90deg, rgba(0, 240, 255, 0.15), rgba(0, 240, 255, 0.35));
+            border: 1px solid var(--cyan);
+            color: #ffffff;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            text-align: center;
+            padding: 10px;
+            text-decoration: none;
+            transition: 0.25s;
+            box-shadow: 0 0 15px var(--cyan-dim);
+            text-transform: uppercase;
+        }
+        .lock-btn:hover {
+            background: var(--cyan);
+            color: #000;
+            box-shadow: 0 0 35px var(--cyan);
+        }
+
+        /* Bottom Waveform & Telemetry Bar */
+        footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 24px;
+            background: rgba(1, 10, 18, 0.85);
+            border: 1px solid var(--cyan-dim);
+            border-radius: 4px;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        #audio-canvas {
+            width: 280px;
+            height: 25px;
+        }
+
+        /* Animations */
+        @keyframes spinCW { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spinCCW { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 240, 255, 0.05); }
+        ::-webkit-scrollbar-thumb { background: var(--cyan-glow); border-radius: 2px; }
+    </style>
+</head>
+<body>
+    <!-- 3D Three.js Background Canvas -->
+    <canvas id="webgl-canvas"></canvas>
+    <div class="film-overlay"></div>
+
+    <!-- 3D Interactive Parallax HUD World -->
+    <div class="hud-world" id="hud-world">
+        <!-- TOP HEADER -->
+        <header>
+            <div class="logo-box">
+                <div class="logo-title">⚡ JARVIS MARK-85 // ARC REACTOR HUD</div>
+                <div class="system-pill">● 21 AUTONOMOUS BOTS ARMED</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:20px;">
+                <div style="font-size:12px;">TARGET: <span style="color:#fff; text-shadow:0 0 10px var(--cyan);">@amanDealsniperBot</span></div>
+                <button class="audio-toggle-btn" id="sound-btn" onclick="toggleSound()">🔊 SFX: ACTIVE</button>
+            </div>
+        </header>
+
+        <!-- MAIN 3D HUD GRID -->
+        <div class="hud-main">
+            <!-- LEFT COLUMN: SYSTEM TELEMETRY -->
+            <div class="hud-pane">
+                <div class="pane-header">
+                    <span>HOLOGRAPHIC SENSORS</span>
+                    <span id="hud-clock">00:00:00</span>
+                </div>
+
+                <div class="gauge-section">
+                    <div class="holo-circle-dial">
+                        <div class="dial-ring-outer"></div>
+                        <div class="dial-ring-inner"></div>
+                        <div class="dial-val" id="hud-scans">2,840</div>
+                        <div class="dial-label">SCANS</div>
+                    </div>
+                    <div class="holo-circle-dial" style="border-color:rgba(255,0,85,0.4);">
+                        <div class="dial-ring-outer" style="border-color:var(--red-glow);"></div>
+                        <div class="dial-ring-inner" style="border-color:var(--red-glow);"></div>
+                        <div class="dial-val" id="hud-loots" style="color:var(--red-glow); text-shadow:0 0 15px var(--red-glow);">24</div>
+                        <div class="dial-label" style="color:#ff77a8;">LOOTS</div>
+                    </div>
+                </div>
+
+                <div class="telemetry-row">
+                    <span>RADAR FREQUENCY</span>
+                    <span class="telemetry-val">4.85 GHz (WAF BYPASS)</span>
+                </div>
+                <div class="telemetry-row">
+                    <span>AMAZON FLEET</span>
+                    <span class="telemetry-val" style="color:#ffb700;">10 BOTS HUNTING</span>
+                </div>
+                <div class="telemetry-row">
+                    <span>FLIPKART FLEET</span>
+                    <span class="telemetry-val" style="color:#38bdf8;">10 BOTS HUNTING</span>
+                </div>
+                <div class="telemetry-row">
+                    <span>MULTI-STORE STREAM</span>
+                    <span class="telemetry-val" style="color:#c084fc;">1 BOT ACTIVE</span>
+                </div>
+                <div class="telemetry-row">
+                    <span>CLOUD PROTOCOL</span>
+                    <span class="telemetry-val">24/7 ONLINE // RENDER</span>
+                </div>
+                <div class="telemetry-row">
+                    <span>SPAM DEFENSE</span>
+                    <span class="telemetry-val" style="color:#10b981;">ACTIVE (ZERO JUNK)</span>
+                </div>
+            </div>
+
+            <!-- CENTER COLUMN: 3D ARC REACTOR FOCAL POINT -->
+            <div class="hud-pane center-pane">
+                <div class="core-radar-hud">
+                    <div class="radar-sweep-beam"></div>
+                </div>
+
+                <!-- 21 BOTS TELEMETRY MATRIX -->
+                <div class="bot-matrix-hud">
+                    <div class="pane-header" style="margin-bottom:8px;">
+                        <span>21 FLEET CONDUITS [TELEMETRY]</span>
+                        <span id="matrix-scans" style="color:#fff;">2,840 PRODUCTS</span>
+                    </div>
+                    <div class="bot-grid-3d" id="bot-grid-3d">
+                        <!-- Bot cells injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: TARGET ACQUISITION DECK -->
+            <div class="hud-pane">
+                <div class="pane-header">
+                    <span>[ 🎯 ] TARGET ACQUISITION DECK</span>
+                    <span style="color:var(--red-glow); animation:pulsePill 1s infinite alternate;">● 70%+ OFF LOCK</span>
+                </div>
+
+                <div class="target-deck" id="target-deck">
+                    <!-- Sample 3D Target Cards -->
+                    <div class="target-hud-box">
+                        <div class="bracket-tl"></div>
+                        <div class="bracket-br"></div>
+                        <div class="discount-pill">⚡ 85% OFF // AMAZON</div>
+                        <div class="target-name">Neeman's Cotton Classic Lightweight Running Shoes</div>
+                        <div class="price-hud-row">
+                            <span class="price-current">₹459</span>
+                            <span class="price-original">₹2,999</span>
+                            <span style="color:#10b981; font-weight:bold; font-size:12px;">BACHAT: ₹2,540</span>
+                        </div>
+                        <a href="https://www.amazon.in" target="_blank" class="lock-btn">⚡ 1-CLICK ACQUIRE [OPEN DEAL]</a>
+                    </div>
+
+                    <div class="target-hud-box">
+                        <div class="bracket-tl"></div>
+                        <div class="bracket-br"></div>
+                        <div class="discount-pill">⚡ 83% OFF // AMAZON</div>
+                        <div class="target-name">Prestige Electric Kettle 1.5L Stainless Steel Auto Cut-off</div>
+                        <div class="price-hud-row">
+                            <span class="price-current">₹499</span>
+                            <span class="price-original">₹2,895</span>
+                            <span style="color:#10b981; font-weight:bold; font-size:12px;">BACHAT: ₹2,396</span>
+                        </div>
+                        <a href="https://www.amazon.in" target="_blank" class="lock-btn">⚡ 1-CLICK ACQUIRE [OPEN DEAL]</a>
+                    </div>
+
+                    <div class="target-hud-box">
+                        <div class="bracket-tl"></div>
+                        <div class="bracket-br"></div>
+                        <div class="discount-pill">⚡ 77% OFF // FLIPKART</div>
+                        <div class="target-name">boAt Wave Call 1.69" HD Display Bluetooth Calling Smartwatch</div>
+                        <div class="price-hud-row">
+                            <span class="price-current">₹1,399</span>
+                            <span class="price-original">₹5,999</span>
+                            <span style="color:#10b981; font-weight:bold; font-size:12px;">BACHAT: ₹4,600</span>
+                        </div>
+                        <a href="https://www.flipkart.com" target="_blank" class="lock-btn">⚡ 1-CLICK ACQUIRE [OPEN DEAL]</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM HUD BAR -->
+        <footer>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <span>AUDIO TELEMETRY:</span>
+                <canvas id="audio-canvas"></canvas>
+            </div>
+            <div>STATUS: <span style="color:var(--cyan-bright);">ALL 21 SYSTEMS SYNCHRONIZED WITH TELEGRAM RADAR</span></div>
+            <div>AMAN BHAI MISSION CONTROL // VER 85.4</div>
+        </footer>
+    </div>
+
+    <!-- THREE.JS 3D ARC REACTOR & PARTICLES ENGINE -->
+    <script>
+        let scene, camera, renderer, arcCoreGroup, particleSystem;
+        let soundEnabled = true;
+        let audioCtx;
+
+        function initThreeJS() {
+            const canvas = document.getElementById('webgl-canvas');
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 28;
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            // Group for the 3D Arc Reactor
+            arcCoreGroup = new THREE.Group();
+            scene.add(arcCoreGroup);
+
+            // Ring 1: Glowing Torus
+            const torusGeo1 = new THREE.TorusGeometry(8, 0.25, 16, 100);
+            const torusMat1 = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true });
+            const ring1 = new THREE.Mesh(torusGeo1, torusMat1);
+            arcCoreGroup.add(ring1);
+
+            // Ring 2: Concentric Inner Torus
+            const torusGeo2 = new THREE.TorusGeometry(6, 0.35, 16, 70);
+            const torusMat2 = new THREE.MeshBasicMaterial({ color: 0x70ffff, wireframe: true });
+            const ring2 = new THREE.Mesh(torusGeo2, torusMat2);
+            arcCoreGroup.add(ring2);
+
+            // Ring 3: Segmented Outer Ring
+            const torusGeo3 = new THREE.TorusGeometry(10.5, 0.15, 8, 50);
+            const torusMat3 = new THREE.MeshBasicMaterial({ color: 0x0088cc, wireframe: true });
+            const ring3 = new THREE.Mesh(torusGeo3, torusMat3);
+            arcCoreGroup.add(ring3);
+
+            // Central Glowing Sphere (The Core)
+            const coreGeo = new THREE.SphereGeometry(2.5, 32, 32);
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+            arcCoreGroup.add(coreMesh);
+
+            // Floating 3D Particles Matrix
+            const particleCount = 600;
+            const particleGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 60;
+                positions[i + 1] = (Math.random() - 0.5) * 40;
+                positions[i + 2] = (Math.random() - 0.5) * 30;
+            }
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const particleMat = new THREE.PointsMaterial({
+                color: 0x00f0ff,
+                size: 0.35,
+                transparent: true,
+                opacity: 0.75
+            });
+            particleSystem = new THREE.Points(particleGeo, particleMat);
+            scene.add(particleSystem);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Mouse Parallax 3D Effect
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX / window.innerWidth) - 0.5;
+            mouseY = (e.clientY / window.innerHeight) - 0.5;
+
+            const hudWorld = document.getElementById('hud-world');
+            hudWorld.style.transform = `rotateY(${mouseX * 8}deg) rotateX(${-mouseY * 8}deg)`;
+        });
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (arcCoreGroup) {
+                arcCoreGroup.rotation.z += 0.008;
+                arcCoreGroup.rotation.x = mouseY * 1.5 + Math.sin(Date.now() * 0.001) * 0.2;
+                arcCoreGroup.rotation.y = mouseX * 1.5 + Math.cos(Date.now() * 0.001) * 0.2;
+            }
+
+            if (particleSystem) {
+                particleSystem.rotation.y -= 0.001;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Web Audio Synthesizer (Sci-Fi Sound FX)
+        function playSciFiBeep(freq = 880, type = 'sine', duration = 0.08) {
+            if (!soundEnabled) return;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('sound-btn');
+            btn.innerText = soundEnabled ? '🔊 SFX: ACTIVE' : '🔇 SFX: MUTED';
+            playSciFiBeep(1200);
+        }
+
+        // Live Audio Visualizer Canvas
+        function drawAudioWaveform() {
+            const canvas = document.getElementById('audio-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 280;
+            canvas.height = 25;
+
+            let step = 0;
+            function renderWave() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#00f0ff';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+
+                for (let x = 0; x < canvas.width; x += 4) {
+                    const y = 12 + Math.sin((x + step) * 0.08) * 6 * Math.sin(step * 0.02);
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                step += 2;
+                requestAnimationFrame(renderWave);
+            }
+            renderWave();
+        }
+
+        // Live Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('hud-clock').innerText = now.toLocaleTimeString('en-US', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // 21 Bots Dynamic Injection
+        const defaultBots = [
+            "Amazon-Cookware", "Amazon-DinnerSets", "Amazon-Groceries",
+            "Amazon-Headphones", "Amazon-Kadai", "Amazon-Laptops",
+            "Amazon-Phones", "Amazon-Shoes", "Amazon-SmartTV", "Amazon-Smartwatches",
+            "Flipkart-Appliances", "Flipkart-Backpacks", "Flipkart-Cookware",
+            "Flipkart-Earbuds", "Flipkart-Fashion", "Flipkart-Laptops",
+            "Flipkart-Mobiles", "Flipkart-Shoes", "Flipkart-TVS", "Flipkart-Watches",
+            "MultiStore-Radar"
+        ];
+
+        function populateBots() {
+            const grid = document.getElementById('bot-grid-3d');
+            grid.innerHTML = '';
+            defaultBots.forEach((name, i) => {
+                grid.innerHTML += `
+                    <div class="bot-cell" onmouseenter="playSciFiBeep(1400)">
+                        <span><span class="cell-pulse"></span>${name}</span>
+                        <span style="color:#fff;">${Math.floor(100 + i * 28)}</span>
+                    </div>
+                `;
+            });
+        }
+
+        // Initialize 3D Core
+        window.addEventListener('DOMContentLoaded', () => {
+            initThreeJS();
+            animate();
+            drawAudioWaveform();
+            populateBots();
+        });
+    </script>
+</body>
+</html>

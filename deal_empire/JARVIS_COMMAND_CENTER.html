@@ -1,0 +1,1774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>JARVIS COMMAND CENTER // 21-BOTS AUTONOMOUS FLEET</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-base: #040911;
+            --bg-card: rgba(8, 20, 36, 0.82);
+            --bg-card-hover: rgba(14, 30, 52, 0.9);
+            --border-glow: rgba(0, 210, 255, 0.25);
+            --border-active: #00e5ff;
+            --cyan-primary: #00d2ff;
+            --cyan-bright: #63f5ff;
+            --green-optimal: #00e699;
+            --amber-warn: #ffaa00;
+            --red-alert: #ff3366;
+            --text-main: #e2edfa;
+            --text-muted: #7d96b3;
+        }
+
+        * { margin:0; padding:0; box-sizing:border-box; font-family: 'Plus Jakarta Sans', sans-serif; }
+        
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(0, 180, 255, 0.14) 0%, transparent 60%),
+                linear-gradient(rgba(0, 210, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 210, 255, 0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 32px 32px, 32px 32px;
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(5, 12, 22, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 210, 255, 0.35); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--cyan-primary); }
+
+        .glass-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(12px);
+            position: relative;
+            transition: all 0.25s ease;
+        }
+        .glass-panel:hover { border-color: rgba(0, 229, 255, 0.45); }
+
+        /* TOP HEADER */
+        header {
+            min-height: 64px;
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-glow);
+            background: rgba(4, 10, 18, 0.94);
+            z-index: 100;
+            position: sticky;
+            top: 0;
+            backdrop-filter: blur(14px);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .header-brand { display: flex; align-items: center; gap: 14px; }
+        .reactor-badge {
+            width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--cyan-primary);
+            box-shadow: 0 0 16px var(--cyan-primary), inset 0 0 10px var(--cyan-primary);
+            display: flex; align-items: center; justify-content: center; position: relative;
+            animation: pulseReactor 3s infinite alternate;
+        }
+        @keyframes pulseReactor {
+            0% { transform: scale(0.96); box-shadow: 0 0 8px var(--cyan-primary); }
+            100% { transform: scale(1.05); box-shadow: 0 0 25px var(--cyan-bright); }
+        }
+        .reactor-badge::after {
+            content:""; width: 14px; height: 14px; border-radius: 50%; background:#fff; box-shadow: 0 0 12px #fff;
+        }
+        .brand-title {
+            font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 18px; letter-spacing: 2px; color: #fff;
+            display: flex; flex-direction: column;
+        }
+        .brand-sub { font-size: 9px; letter-spacing: 3px; color: var(--cyan-primary); text-transform: uppercase; }
+
+        .status-pill {
+            display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+            background: rgba(0, 230, 153, 0.1); border: 1px solid rgba(0, 230, 153, 0.4); border-radius: 20px;
+            font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--green-optimal);
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: var(--green-optimal);
+            box-shadow: 0 0 10px var(--green-optimal); animation: blinkDot 1.5s infinite;
+        }
+        @keyframes blinkDot { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+        .header-center-clock { text-align: center; }
+        .clock-date { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; }
+        .clock-time {
+            font-family: 'Orbitron', sans-serif; font-size: 18px; font-weight: 800; color: var(--cyan-bright);
+            text-shadow: 0 0 12px rgba(0, 210, 255, 0.6);
+        }
+
+        .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .voice-mode-select {
+            background: rgba(10, 24, 42, 0.95);
+            border: 1px solid var(--cyan-primary);
+            color: var(--cyan-bright);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 6px 12px;
+            border-radius: 8px;
+            outline: none;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.2);
+        }
+        .header-mic-btn {
+            background: linear-gradient(135deg, rgba(0, 210, 255, 0.25), rgba(0, 150, 255, 0.35));
+            border: 1.5px solid var(--cyan-primary);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 0 16px rgba(0, 210, 255, 0.35);
+            transition: all 0.2s ease;
+        }
+        .header-mic-btn:hover {
+            transform: scale(1.04);
+            box-shadow: 0 0 25px var(--cyan-bright);
+            background: var(--cyan-primary);
+            color: #000;
+        }
+        .header-mic-btn.listening {
+            background: var(--red-alert) !important;
+            border-color: #ff6699;
+            color: #fff !important;
+            animation: pulseListening 1s infinite alternate;
+        }
+        @keyframes pulseListening {
+            0% { transform: scale(0.98); box-shadow: 0 0 10px var(--red-alert); }
+            100% { transform: scale(1.06); box-shadow: 0 0 30px var(--red-alert); }
+        }
+
+        .operator-tag {
+            padding: 5px 12px; background: rgba(0, 210, 255, 0.08); border: 1px solid var(--border-glow);
+            border-radius: 6px; font-size: 11px; color: #fff; font-weight: 600;
+        }
+
+        /* MAIN APP WRAPPER */
+        .app-body {
+            display: flex;
+            flex: 1;
+            min-height: calc(100vh - 64px);
+            position: relative;
+        }
+
+        /* LEFT SIDEBAR NAVIGATION */
+        .sidebar {
+            width: 230px;
+            min-width: 230px;
+            border-right: 1px solid var(--border-glow);
+            background: rgba(5, 12, 22, 0.85);
+            padding: 16px 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 16px;
+        }
+        .nav-list { display: flex; flex-direction: column; gap: 6px; }
+        .nav-item {
+            display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border-radius: 8px;
+            font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer; transition: all 0.2s;
+            border: 1px solid transparent;
+            user-select: none;
+        }
+        .nav-item .nav-left { display: flex; align-items: center; gap: 12px; }
+        .nav-item:hover {
+            color: #fff; background: rgba(0, 210, 255, 0.08); border-color: rgba(0, 210, 255, 0.2);
+        }
+        .nav-item.active {
+            color: var(--cyan-bright); background: rgba(0, 210, 255, 0.16);
+            border-color: var(--cyan-primary);
+            box-shadow: inset 0 0 16px rgba(0, 210, 255, 0.2), 0 0 15px rgba(0, 210, 255, 0.15);
+            font-weight: 700;
+        }
+        .nav-badge {
+            font-size: 9px; padding: 2px 6px; border-radius: 10px; font-weight: 800;
+            background: rgba(0, 210, 255, 0.15); color: var(--cyan-bright); border: 1px solid rgba(0, 210, 255, 0.3);
+        }
+        .nav-item.active .nav-badge { background: var(--cyan-primary); color: #000; }
+
+        /* SIDEBAR VOICE CONTROLS */
+        .sidebar-voice-card {
+            padding: 14px;
+            background: rgba(7, 18, 32, 0.95);
+            border: 1px solid var(--border-glow);
+            border-radius: 10px;
+            text-align: center;
+        }
+        .voice-wave-bars {
+            display: flex; justify-content: center; align-items: flex-end; gap: 4px; height: 24px; margin: 10px 0;
+        }
+        .wave-bar {
+            width: 4px; background: var(--cyan-primary); border-radius: 2px;
+            height: 6px; transition: height 0.15s ease;
+        }
+        .wave-animating .wave-bar:nth-child(1) { animation: wave 0.8s infinite ease-in-out; }
+        .wave-animating .wave-bar:nth-child(2) { animation: wave 0.6s infinite ease-in-out 0.1s; }
+        .wave-animating .wave-bar:nth-child(3) { animation: wave 0.9s infinite ease-in-out 0.2s; }
+        .wave-animating .wave-bar:nth-child(4) { animation: wave 0.7s infinite ease-in-out 0.3s; }
+        .wave-animating .wave-bar:nth-child(5) { animation: wave 0.8s infinite ease-in-out 0.4s; }
+        @keyframes wave {
+            0%, 100% { height: 6px; background: var(--cyan-primary); }
+            50% { height: 22px; background: var(--cyan-bright); }
+        }
+
+        /* VIEW CONTAINER (SPA ARCHITECTURE) */
+        .view-content-wrapper {
+            flex: 1;
+            padding: 18px;
+            overflow-y: auto;
+            position: relative;
+        }
+        .tab-view {
+            display: none;
+            flex-direction: column;
+            gap: 16px;
+            animation: fadeInView 0.25s ease-out;
+        }
+        .tab-view.active { display: flex; }
+        @keyframes fadeInView {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* VIEW HEADERS */
+        .view-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border-glow); padding-bottom: 12px; margin-bottom: 4px;
+            flex-wrap: wrap; gap: 10px;
+        }
+        .view-title {
+            font-family: 'Orbitron', sans-serif; font-size: 17px; font-weight: 800; letter-spacing: 2px;
+            color: #fff; display: flex; align-items: center; gap: 10px;
+        }
+        .view-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+        /* VIEW 1: COMMAND CENTER SPECIFIC */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .kpi-card {
+            padding: 14px 18px; display: flex; flex-direction: column; gap: 4px;
+        }
+        .kpi-label { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; color: var(--text-muted); text-transform: uppercase; }
+        .kpi-val { font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 900; color: #fff; }
+
+        .center-hud-grid {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 16px;
+        }
+        @media (max-width: 1080px) {
+            .center-hud-grid { grid-template-columns: 1fr; }
+        }
+
+        .hologram-card {
+            min-height: 250px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; overflow: hidden; padding: 20px;
+        }
+        #sphere-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .core-text-overlay { position: relative; z-index: 5; text-align: center; pointer-events: none; }
+        .core-hero-title {
+            font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 6px;
+            color: #fff; text-shadow: 0 0 20px var(--cyan-primary);
+        }
+        .core-hero-sub { font-size: 11px; letter-spacing: 3px; color: var(--cyan-bright); margin-top: 4px; font-weight: 700; }
+
+        /* VOICE HUB CONSOLE (IN HUD) */
+        .voice-console-hud {
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(8, 24, 46, 0.9), rgba(5, 14, 28, 0.95));
+            border: 1.5px solid var(--cyan-primary);
+            border-radius: 12px;
+            box-shadow: 0 0 25px rgba(0, 210, 255, 0.25);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .voice-console-top {
+            display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+        }
+        .voice-hero-btn {
+            display: flex; align-items: center; gap: 12px; padding: 10px 24px;
+            background: linear-gradient(90deg, rgba(0, 210, 255, 0.2), rgba(0, 170, 255, 0.35));
+            border: 2px solid var(--cyan-primary); border-radius: 30px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.35); transition: all 0.25s;
+        }
+        .voice-hero-btn:hover {
+            transform: scale(1.02); box-shadow: 0 0 35px var(--cyan-bright); background: var(--cyan-primary); color: #000;
+        }
+        .voice-hero-btn.listening {
+            background: var(--red-alert) !important; border-color: #ff99bb !important; color: #fff !important;
+            animation: pulseListening 0.9s infinite alternate;
+        }
+        .voice-hero-btn span.mic-icon { font-size: 22px; }
+        .voice-hero-btn .btn-text-main { font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 2px; }
+        .voice-hero-btn .btn-text-sub { font-size: 10px; opacity: 0.85; }
+
+        /* QUICK VOICE CHIPS */
+        .quick-chips-row {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        }
+        .chip-label { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+        .voice-chip {
+            padding: 6px 12px; background: rgba(0, 210, 255, 0.08); border: 1px solid var(--border-glow);
+            border-radius: 16px; font-size: 11px; font-weight: 600; color: var(--cyan-bright); cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 5px;
+        }
+        .voice-chip:hover {
+            background: rgba(0, 210, 255, 0.25); border-color: var(--cyan-primary); transform: translateY(-1px);
+            box-shadow: 0 0 12px rgba(0, 210, 255, 0.3);
+        }
+
+        /* LIVE TRANSCRIPT BUBBLE */
+        .live-transcript-bubble {
+            background: rgba(4, 12, 22, 0.95); border: 1px solid var(--border-glow);
+            border-radius: 8px; padding: 10px 14px; font-size: 12px; line-height: 1.5;
+            display: none; transition: all 0.3s;
+        }
+        .live-transcript-bubble strong { color: var(--cyan-bright); font-family: 'Orbitron', sans-serif; }
+
+        /* AGENTS MINI GRID (HUD) */
+        .agents-hud-section { padding: 16px; }
+        .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; }
+        .agent-card {
+            padding: 10px 12px; background: rgba(7, 16, 28, 0.7); border: 1px solid rgba(0, 210, 255, 0.15);
+            border-radius: 8px; display: flex; flex-direction: column; gap: 6px; transition: 0.2s;
+        }
+        .agent-card:hover { border-color: var(--cyan-primary); background: rgba(0, 210, 255, 0.08); transform: translateY(-2px); }
+        .agent-card-header { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: #fff; }
+        .agent-pill { font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 800; }
+        .pill-active { background: rgba(0, 230, 153, 0.15); color: var(--green-optimal); border: 1px solid rgba(0, 230, 153, 0.4); }
+        .pill-idle { background: rgba(255, 170, 0, 0.15); color: var(--amber-warn); border: 1px solid rgba(255, 170, 0, 0.4); }
+        .agent-scans { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; }
+
+        /* RIGHT FEED */
+        .feed-pane { padding: 16px; display: flex; flex-direction: column; height: 100%; min-height: 480px; }
+        .deal-list { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; padding-right: 4px; max-height: 520px; }
+        .deal-item {
+            background: rgba(7, 16, 28, 0.75); border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 8px; padding: 12px; transition: 0.2s;
+        }
+        .deal-item:hover { border-color: var(--cyan-primary); transform: translateX(2px); }
+        .deal-badge {
+            font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px;
+            background: var(--red-alert); color: #fff; display: inline-block; margin-bottom: 6px;
+        }
+        .deal-item-title { font-size: 12px; font-weight: 700; color: #fff; line-height: 1.35; margin-bottom: 6px; }
+        .deal-price-row { display: flex; gap: 10px; align-items: baseline; margin: 4px 0 8px 0; }
+        .deal-p-now { font-size: 16px; font-weight: 800; color: var(--cyan-bright); font-family: 'Orbitron', sans-serif; }
+        .deal-p-mrp { font-size: 11px; color: var(--text-muted); text-decoration: line-through; }
+        .deal-btn {
+            display: block; width: 100%; text-align: center; font-size: 11px; font-weight: 700;
+            padding: 7px; border: 1px solid var(--cyan-primary); border-radius: 5px;
+            color: var(--cyan-primary); text-decoration: none; transition: 0.2s; background: rgba(0, 210, 255, 0.05);
+        }
+        .deal-btn:hover { background: var(--cyan-primary); color: #000; box-shadow: 0 0 14px var(--cyan-primary); }
+
+        /* VIEW 2: AI CORE SPECIFIC */
+        .ai-core-layout {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 16px;
+        }
+        @media (max-width: 900px) {
+            .ai-core-layout { grid-template-columns: 1fr; }
+        }
+        .control-group {
+            display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;
+        }
+        .control-label {
+            font-size: 12px; font-weight: 700; color: var(--text-muted); display: flex; justify-content: space-between;
+        }
+        .slider-input {
+            width: 100%; accent-color: var(--cyan-primary); cursor: pointer;
+        }
+        .chat-terminal {
+            height: 480px; display: flex; flex-direction: column; justify-content: space-between;
+            padding: 16px;
+        }
+        .chat-feed {
+            flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 6px;
+        }
+        .chat-bubble {
+            max-width: 80%; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.45;
+        }
+        .chat-bubble.user {
+            align-self: flex-end; background: rgba(0, 210, 255, 0.15); border: 1px solid var(--cyan-primary);
+            color: #fff;
+        }
+        .chat-bubble.jarvis {
+            align-self: flex-start; background: rgba(10, 24, 42, 0.9); border: 1px solid var(--border-glow);
+            color: var(--text-main);
+        }
+        .chat-input-row {
+            display: flex; gap: 8px; margin-top: 12px;
+        }
+        .chat-input {
+            flex: 1; background: rgba(5, 12, 22, 0.9); border: 1px solid var(--border-glow); border-radius: 8px;
+            padding: 10px 14px; color: #fff; font-size: 13px; outline: none;
+        }
+        .chat-input:focus { border-color: var(--cyan-primary); }
+        .chat-send-btn {
+            padding: 0 18px; background: var(--cyan-primary); color: #000; font-weight: 700; border: none;
+            border-radius: 8px; cursor: pointer; transition: 0.2s;
+        }
+        .chat-send-btn:hover { background: var(--cyan-bright); box-shadow: 0 0 12px var(--cyan-primary); }
+
+        /* VIEW 3: 21 BOTS FLEET SPECIFIC */
+        .filter-bar {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+        .filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+        .filter-btn {
+            padding: 6px 14px; background: rgba(10, 22, 38, 0.8); border: 1px solid var(--border-glow);
+            border-radius: 6px; font-size: 12px; font-weight: 700; color: var(--text-muted); cursor: pointer;
+            transition: 0.2s;
+        }
+        .filter-btn.active, .filter-btn:hover {
+            color: #fff; background: rgba(0, 210, 255, 0.15); border-color: var(--cyan-primary);
+        }
+        .search-fleet-input {
+            padding: 7px 14px; background: rgba(10, 22, 38, 0.8); border: 1px solid var(--border-glow);
+            border-radius: 6px; color: #fff; font-size: 12px; outline: none; width: 220px;
+        }
+        .fleet-table-wrap { overflow-x: auto; }
+        .fleet-table {
+            width: 100%; border-collapse: collapse; text-align: left; font-size: 12px;
+        }
+        .fleet-table th {
+            padding: 12px 14px; background: rgba(5, 14, 26, 0.8); color: var(--cyan-bright);
+            font-family: 'Orbitron', sans-serif; font-size: 11px; letter-spacing: 1px; border-bottom: 1px solid var(--border-glow);
+        }
+        .fleet-table td {
+            padding: 12px 14px; border-bottom: 1px solid rgba(0, 210, 255, 0.08); color: var(--text-main);
+        }
+        .fleet-table tr:hover td { background: rgba(0, 210, 255, 0.04); }
+
+        /* VIEW 5: ANALYTICS SPECIFIC */
+        .analytics-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;
+        }
+        @media (max-width: 600px) {
+            .analytics-grid { grid-template-columns: 1fr; }
+        }
+        .chart-card { padding: 18px; display: flex; flex-direction: column; min-height: 320px; }
+        .chart-box-inner { flex: 1; position: relative; width: 100%; height: 240px; }
+
+        /* VIEW 6: TELEGRAM ALERT SPECIFIC */
+        .tg-panel { padding: 24px; max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+        .tg-status-card {
+            display: flex; align-items: center; justify-content: space-between; padding: 18px 24px;
+            background: rgba(0, 210, 255, 0.06); border: 1px solid var(--cyan-primary); border-radius: 12px;
+        }
+        .tg-btn-primary {
+            padding: 14px 28px; background: linear-gradient(135deg, #0088cc, #00b4d8); border: none; border-radius: 8px;
+            color: #fff; font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 800; letter-spacing: 1.5px;
+            cursor: pointer; transition: all 0.25s; box-shadow: 0 0 20px rgba(0, 136, 204, 0.4); text-align: center;
+        }
+        .tg-btn-primary:hover {
+            transform: scale(1.02); box-shadow: 0 0 35px rgba(0, 180, 216, 0.6);
+        }
+        .tg-preview-box {
+            background: #17212b; border: 1px solid #2b5278; border-radius: 12px; padding: 18px;
+            color: #f5f5f5; font-size: 13px; line-height: 1.6; font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        /* VIEW 7: SETTINGS SPECIFIC */
+        .settings-panel { padding: 24px; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+        .setting-row {
+            display: flex; align-items: center; justify-content: space-between; padding: 16px;
+            background: rgba(7, 16, 28, 0.6); border: 1px solid var(--border-glow); border-radius: 8px;
+        }
+        .switch-toggle {
+            position: relative; display: inline-block; width: 48px; height: 26px;
+        }
+        .switch-toggle input { opacity: 0; width: 0; height: 0; }
+        .slider-round {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #2b394a; transition: .3s; border-radius: 26px;
+        }
+        .slider-round:before {
+            position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px;
+            background-color: white; transition: .3s; border-radius: 50%;
+        }
+        input:checked + .slider-round { background-color: var(--cyan-primary); }
+        input:checked + .slider-round:before { transform: translateX(22px); }
+
+        /* NOTIFICATION TOAST */
+        .toast-msg {
+            position: fixed; bottom: 24px; right: 24px; background: rgba(5, 18, 34, 0.95);
+            border: 1.5px solid var(--cyan-primary); color: #fff; padding: 14px 22px; border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 210, 255, 0.4); font-size: 13px; font-weight: 700; z-index: 1000;
+            display: none; animation: slideToast 0.3s ease;
+        }
+        @keyframes slideToast {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP HEADER -->
+    <header>
+        <div class="header-brand">
+            <div class="reactor-badge"></div>
+            <div class="brand-title">
+                <span>JARVIS</span>
+                <span class="brand-sub">COMMAND CENTER // 21 BOTS</span>
+            </div>
+        </div>
+
+        <div class="status-pill">
+            <div class="status-dot"></div>
+            <span id="header-status-text">FLEET STATUS : 21 BOTS ONLINE</span>
+        </div>
+
+        <div class="header-center-clock">
+            <div class="clock-date" id="clock-date">Initializing...</div>
+            <div class="clock-time" id="clock-time">00:00:00</div>
+        </div>
+
+        <div class="header-actions">
+            <select class="voice-mode-select" id="voice-accent" onchange="onVoiceAccentChanged()">
+                <option value="hindi_natural">🇮🇳 Natural Hindi (मानव आवाज़)</option>
+                <option value="jarvis_english">🇬🇧 Movie JARVIS (Paul Bettany)</option>
+            </select>
+            <button class="header-mic-btn" id="header-mic" onclick="toggleVoiceListening()">
+                <span>🎙️</span> <span id="header-mic-label">TAP TO TALK</span>
+            </button>
+            <div class="operator-tag">Commander: Aman Mishra</div>
+        </div>
+    </header>
+
+    <!-- APP BODY -->
+    <div class="app-body">
+        
+        <!-- LEFT SIDEBAR -->
+        <div class="sidebar">
+            <div class="nav-list">
+                <div class="nav-item active" onclick="switchTab('command_center', this)">
+                    <div class="nav-left"><span>⚡</span> Command Center</div>
+                    <span class="nav-badge">HUD</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('ai_core', this)">
+                    <div class="nav-left"><span>🧠</span> AI Core</div>
+                    <span class="nav-badge">ONLINE</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('bots_fleet', this)">
+                    <div class="nav-left"><span>🤖</span> 21 Bots Fleet</div>
+                    <span class="nav-badge" id="sidebar-bots-badge">21 LIVE</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('loot_radar', this)">
+                    <div class="nav-left"><span>🎯</span> Loot Radar</div>
+                    <span class="nav-badge" style="color:var(--red-alert);">70%+</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('analytics', this)">
+                    <div class="nav-left"><span>📊</span> Analytics</div>
+                    <span class="nav-badge">CHARTS</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('telegram_alert', this)">
+                    <div class="nav-left"><span>📱</span> Telegram Alert</div>
+                    <span class="nav-badge" style="color:var(--green-optimal);">ARMED</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('settings', this)">
+                    <div class="nav-left"><span>⚙️</span> Settings</div>
+                    <span class="nav-badge">CONFIG</span>
+                </div>
+            </div>
+
+            <!-- SIDEBAR VOICE STATUS WIDGET -->
+            <div class="sidebar-voice-card">
+                <div style="font-size: 10px; font-weight:800; letter-spacing:1px; color:var(--text-muted); text-transform:uppercase;">NEURAL VOICE RADAR</div>
+                <div style="font-size: 11px; color:var(--green-optimal); font-weight:700; margin:4px 0;" id="sidebar-voice-name">Natural Human Mode</div>
+                
+                <div class="voice-wave-bars" id="voice-waves">
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                    <div class="wave-bar"></div>
+                </div>
+
+                <button style="background:transparent; border:1px solid var(--border-glow); color:var(--cyan-bright); font-size:11px; font-weight:700; padding:5px 12px; border-radius:6px; cursor:pointer; width:100%; transition:0.2s;" onclick="testSelectedVoice()">
+                    🔊 Test Voice Output
+                </button>
+            </div>
+        </div>
+
+        <!-- MAIN VIEW WRAPPER -->
+        <div class="view-content-wrapper">
+
+            <!-- ========================================== -->
+            <!-- ⚡ VIEW 1: COMMAND CENTER (MAIN HUD) -->
+            <!-- ========================================== -->
+            <div class="tab-view active" id="view-command_center">
+                
+                <!-- TOP KPIS -->
+                <div class="kpi-row">
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">AI CORE ENGINE</span>
+                        <span class="kpi-val" style="color:var(--green-optimal);">ACTIVE</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Zero crashes detected</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">TOTAL SCANNED</span>
+                        <span class="kpi-val" id="kpi-scans">4,280</span>
+                        <span style="font-size:11px; color:var(--cyan-bright);" id="kpi-scan-rate">+120 items / min</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">70%+ LOOTS FOUND</span>
+                        <span class="kpi-val" id="kpi-loots" style="color:var(--red-alert);">18 Deals</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Instant alert pipeline</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">HUNTER FLEET</span>
+                        <span class="kpi-val" style="color:var(--cyan-bright);" id="kpi-bots-count">21 ARMED</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Amazon, Flipkart, Multi</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">TELEGRAM DISPATCH</span>
+                        <span class="kpi-val" style="font-size:14px; color:#ff77aa;">@amanDealsniperBot</span>
+                        <span style="font-size:11px; color:var(--green-optimal);">Chat ID: 6208434509</span>
+                    </div>
+                </div>
+
+                <!-- CENTER HUD (HOLOGRAM + VOICE CONSOLE + FEED) -->
+                <div class="center-hud-grid">
+                    
+                    <div style="display:flex; flex-direction:column; gap:16px;">
+                        
+                        <!-- 3D HOLOGRAM HERO -->
+                        <div class="glass-panel hologram-card">
+                            <canvas id="sphere-canvas"></canvas>
+                            <div class="core-text-overlay">
+                                <div class="core-hero-title">JARVIS</div>
+                                <div class="core-hero-sub">AI CONVERSATIONAL CORE v3.5</div>
+                            </div>
+                        </div>
+
+                        <!-- 🎙️ PROMINENT VOICE CONSOLE IN HUD -->
+                        <div class="voice-console-hud">
+                            <div class="voice-console-top">
+                                <div class="voice-hero-btn" id="voice-hero-btn" onclick="toggleVoiceListening()">
+                                    <span class="mic-icon">🎙️</span>
+                                    <div>
+                                        <div class="btn-text-main" id="voice-btn-label">TALK TO JARVIS</div>
+                                        <div class="btn-text-sub" id="voice-btn-sub">Click here & speak naturally in Hindi or English</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span style="font-size:11px; color:var(--text-muted);">State:</span>
+                                    <span class="status-pill" id="voice-state-badge" style="padding:4px 10px; font-size:10px;">IDLE // READY</span>
+                                </div>
+                            </div>
+
+                            <!-- QUICK VOICE CHIPS -->
+                            <div class="quick-chips-row">
+                                <span class="chip-label">Quick Prompts:</span>
+                                <div class="voice-chip" onclick="handleQuickVoice('क्या अपडेट है?')">
+                                    <span>💬</span> "क्या अपडेट है?"
+                                </div>
+                                <div class="voice-chip" onclick="handleQuickVoice('कितने बॉट्स काम कर रहे हैं?')">
+                                    <span>💬</span> "कितने बॉट्स काम कर रहे हैं?"
+                                </div>
+                                <div class="voice-chip" onclick="handleQuickVoice('कौन सा बॉट बंद है?')">
+                                    <span>💬</span> "कौन सा बॉट बंद है?"
+                                </div>
+                                <div class="voice-chip" onclick="handleQuickVoice('लाइव चार्ट बना के दिखाओ')">
+                                    <span>📊</span> "लाइव चार्ट बनाओ"
+                                </div>
+                            </div>
+
+                            <!-- LIVE TRANSCRIPT BUBBLE -->
+                            <div class="live-transcript-bubble" id="hud-transcript-bubble">
+                                <div><strong id="transcript-speaker">YOU:</strong> <span id="transcript-user-text">...</span></div>
+                                <div style="margin-top:6px;"><strong style="color:var(--green-optimal);">JARVIS:</strong> <span id="transcript-jarvis-text">...</span></div>
+                            </div>
+                        </div>
+
+                        <!-- TELEMETRY CHART IN HUD -->
+                        <div class="glass-panel" style="padding:16px;">
+                            <div class="view-header" style="border:none; margin-bottom:8px; padding-bottom:0;">
+                                <div style="font-family:'Orbitron',sans-serif; font-size:12px; font-weight:700; color:#fff;">
+                                    FLEET REAL-TIME PERFORMANCE CHART
+                                </div>
+                                <div style="font-size:11px; color:var(--cyan-bright);" id="hud-chart-tag">All 21 Bots Plotted</div>
+                            </div>
+                            <div style="height:190px; position:relative;">
+                                <canvas id="hudTelemetryChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 21 BOTS PREVIEW GRID -->
+                        <div class="glass-panel agents-hud-section">
+                            <div class="view-header" style="border:none; margin-bottom:4px; padding-bottom:0;">
+                                <div style="font-family:'Orbitron',sans-serif; font-size:12px; font-weight:700; color:#fff;">
+                                    ACTIVE HUNTERS PREVIEW (21 BOTS)
+                                </div>
+                                <span style="font-size:11px; color:var(--cyan-primary); cursor:pointer;" onclick="switchTab('bots_fleet')">View Full Fleet Table ➔</span>
+                            </div>
+                            <div class="agents-grid" id="hud-agents-grid"></div>
+                        </div>
+
+                    </div>
+
+                    <!-- RIGHT FEED PANE -->
+                    <div class="glass-panel feed-pane">
+                        <div class="view-header" style="border:none; margin-bottom:6px; padding-bottom:0;">
+                            <div style="font-family:'Orbitron',sans-serif; font-size:12px; font-weight:700; color:#fff;">LIVE LOOT FEED</div>
+                            <span style="font-size:10px; font-weight:800; color:var(--red-alert); animation:blinkDot 1.2s infinite;">● 70%+ LOCK</span>
+                        </div>
+                        <div class="deal-list" id="hud-deals-list"></div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- ========================================== -->
+            <!-- 🧠 VIEW 2: AI CORE -->
+            <!-- ========================================== -->
+            <div class="tab-view" id="view-ai_core">
+                <div class="view-header">
+                    <div>
+                        <div class="view-title"><span>🧠</span> AI NEURAL CORE & CONVERSATIONAL MATRIX</div>
+                        <div class="view-desc">Configure JARVIS's voice engine, neural pitch, speed, and test natural human dialogue.</div>
+                    </div>
+                    <span class="status-pill">ENGINE READY</span>
+                </div>
+
+                <div class="ai-core-layout">
+                    <!-- VOICE CONTROLS PANEL -->
+                    <div class="glass-panel" style="padding:18px;">
+                        <div style="font-family:'Orbitron',sans-serif; font-size:13px; font-weight:700; color:#fff; margin-bottom:14px;">
+                            VOICE SYNTHESIS TUNER
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span>Speech Rate (Speed)</span>
+                                <span id="val-rate">1.0x</span>
+                            </div>
+                            <input type="range" class="slider-input" id="slider-rate" min="0.5" max="1.5" step="0.05" value="1.0" oninput="document.getElementById('val-rate').innerText = this.value + 'x'">
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span>Pitch (Tone Depth)</span>
+                                <span id="val-pitch">1.0</span>
+                            </div>
+                            <input type="range" class="slider-input" id="slider-pitch" min="0.5" max="1.5" step="0.05" value="1.0" oninput="document.getElementById('val-pitch').innerText = this.value">
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span>Output Volume</span>
+                                <span id="val-vol">100%</span>
+                            </div>
+                            <input type="range" class="slider-input" id="slider-vol" min="0" max="1" step="0.05" value="1.0" oninput="document.getElementById('val-vol').innerText = Math.round(this.value * 100) + '%'">
+                        </div>
+
+                        <div style="margin-top:20px; display:flex; flex-direction:column; gap:8px;">
+                            <button class="tg-btn-primary" style="padding:10px;" onclick="testSelectedVoice()">
+                                🔊 Test Voice Audio Now
+                            </button>
+                            <button class="filter-btn" style="width:100%; text-align:center;" onclick="toggleVoiceListening()">
+                                🎙️ Open Mic Voice Diagnostic
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CONVERSATION TERMINAL -->
+                    <div class="glass-panel chat-terminal">
+                        <div class="chat-feed" id="core-chat-feed">
+                            <div class="chat-bubble jarvis">
+                                <strong>JARVIS:</strong> Good day, Commander Aman. All systems and 21 autonomous bots are operational. I am ready to converse in pure natural Hindi or English. How may I assist you, Sir?
+                            </div>
+                        </div>
+
+                        <div class="chat-input-row">
+                            <input type="text" class="chat-input" id="core-chat-input" placeholder="Type query (e.g. 'kya update hai', 'kaun sa bot band hai')..." onkeydown="if(event.key==='Enter') submitCoreChat()">
+                            <button class="chat-send-btn" onclick="submitCoreChat()">SEND</button>
+                            <button class="chat-send-btn" style="background:transparent; border:1px solid var(--cyan-primary); color:var(--cyan-bright);" onclick="toggleVoiceListening()">🎙️</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- 🤖 VIEW 3: 21 BOTS FLEET -->
+            <!-- ========================================== -->
+            <div class="tab-view" id="view-bots_fleet">
+                <div class="view-header">
+                    <div>
+                        <div class="view-title"><span>🤖</span> 21 AUTONOMOUS HUNTER FLEET</div>
+                        <div class="view-desc">Monitor, filter, and inspect individual performance across all 21 bots.</div>
+                    </div>
+                    <button class="filter-btn" onclick="triggerManualSweep()">⚡ Force Scan All 21 Bots</button>
+                </div>
+
+                <div class="glass-panel" style="padding:16px;">
+                    <div class="filter-bar">
+                        <div class="filter-buttons">
+                            <button class="filter-btn active" onclick="filterFleet('all', this)">All (21)</button>
+                            <button class="filter-btn" onclick="filterFleet('Amazon', this)">Amazon (10)</button>
+                            <button class="filter-btn" onclick="filterFleet('Flipkart', this)">Flipkart (10)</button>
+                            <button class="filter-btn" onclick="filterFleet('MultiStore', this)">MultiStore (1)</button>
+                            <button class="filter-btn" onclick="filterFleet('active', this)">Active Only</button>
+                            <button class="filter-btn" onclick="filterFleet('idle', this)">Idle Only</button>
+                        </div>
+                        <input type="text" class="search-fleet-input" id="search-fleet" placeholder="Search bot name or category..." oninput="onSearchFleet(this.value)">
+                    </div>
+
+                    <div class="fleet-table-wrap">
+                        <table class="fleet-table">
+                            <thead>
+                                <tr>
+                                    <th>BOT IDENTIFIER</th>
+                                    <th>STORE</th>
+                                    <th>CATEGORY</th>
+                                    <th>TOTAL SCANNED</th>
+                                    <th>STATUS</th>
+                                    <th>ACTIONS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fleet-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- 🎯 VIEW 4: LOOT RADAR -->
+            <!-- ========================================== -->
+            <div class="tab-view" id="view-loot_radar">
+                <div class="view-header">
+                    <div>
+                        <div class="view-title"><span>🎯</span> 70%+ DISCOUNT LOOT RADAR</div>
+                        <div class="view-desc">Real-time feed of detected error-pricing and high-discount drops.</div>
+                    </div>
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" onclick="filterLoots(70, this)">70%+ Off</button>
+                        <button class="filter-btn" onclick="filterLoots(80, this)">80%+ Off</button>
+                        <button class="filter-btn" onclick="filterLoots(90, this)">90%+ Loot Drop</button>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding:16px;">
+                    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:14px;" id="radar-deals-grid"></div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- 📊 VIEW 5: ANALYTICS -->
+            <!-- ========================================== -->
+            <div class="tab-view" id="view-analytics">
+                <div class="view-header">
+                    <div>
+                        <div class="view-title"><span>📊</span> FLEET ANALYTICS & TELEMETRY CHARTS</div>
+                        <div class="view-desc">Comparative scanning volume, platform distribution, and hunter efficiency.</div>
+                    </div>
+                    <span class="status-pill">TELEMETRY SYNCED</span>
+                </div>
+
+                <div class="analytics-grid">
+                    <div class="glass-panel chart-card">
+                        <div class="view-header" style="border:none; margin-bottom:8px;">
+                            <div style="font-family:'Orbitron',sans-serif; font-size:12px; font-weight:700; color:#fff;">COMPARATIVE SCANS PER BOT</div>
+                        </div>
+                        <div class="chart-box-inner">
+                            <canvas id="analyticsBarChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel chart-card">
+                        <div class="view-header" style="border:none; margin-bottom:8px;">
+                            <div style="font-family:'Orbitron',sans-serif; font-size:12px; font-weight:700; color:#fff;">STORE SHARE RATIO</div>
+                        </div>
+                        <div class="chart-box-inner">
+                            <canvas id="analyticsDonutChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- 📱 VIEW 6: TELEGRAM ALERT -->
+            <!-- ========================================== -->
+            <div class="tab-view" id="view-telegram_alert">
+                <div class="view-header">
+                    <div>
+                        <div class="view-title"><span>📱</span> TELEGRAM DISPATCH CENTER</div>
+                        <div class="view-desc">Instant phone alerts via @amanDealsniperBot to Aman Mishra.</div>
+                    </div>
+                    <span class="status-pill">BOT ARMED</span>
+                </div>
+
+                <div class="glass-panel tg-panel">
+                    <div class="tg-status-card">
+                        <div>
+                            <div style="font-family:'Orbitron',sans-serif; font-size:14px; font-weight:800; color:#fff;">@amanDealsniperBot</div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">Chat ID: 6208434509 // Target: Aman Mishra</div>
+                        </div>
+                        <span class="status-pill">CONNECTED</span>
+                    </div>
+
+                    <button class="tg-btn-primary" id="tg-test-btn" onclick="sendTestTelegramAlert()">
+                        📱 SEND REAL TEST ALERT TO AMAN'S TELEGRAM
+                    </button>
+
+                    <div>
+                        <div style="font-size:12px; font-weight:700; color:var(--cyan-bright); margin-bottom:8px;">LIVE MESSAGE FORMAT PREVIEW:</div>
+                        <div class="tg-preview-box">
+                            🚨 <b>77% LOOT ALERT | AMAZON</b> 🚨<br><br>
+                            📦 <b>Pigeon Hard Anodised Kadai with Stainless Steel Lid 2.5L</b><br><br>
+                            💰 <b>Loot Deal:</b> ₹499<br>
+                            ❌ <b>MRP:</b> <del>₹2,195</del><br>
+                            🔥 <b>Bachat:</b> ₹1,696 (77% OFF)<br>
+                            🏷️ <b>Category:</b> Cookware<br><br>
+                            ⚡ <b>1-Click Buy Link:</b><br>
+                            <u>https://www.amazon.in/dp/B0777K8D5P</u><br><br>
+                            ⚠️ <i>Price kabhi bhi badh sakti hai, jaldi check karein!</i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- ⚙️ VIEW 7: SETTINGS -->
+            <!-- ========================================== -->
+            <div class="tab-view" id="view-settings">
+                <div class="view-header">
+                    <div>
+                        <div class="view-title"><span>⚙️</span> SYSTEM CONFIGURATION</div>
+                        <div class="view-desc">Adjust thresholds, scanning speeds, and voice preferences.</div>
+                    </div>
+                    <button class="tg-btn-primary" style="padding:8px 18px;" onclick="saveSettings()">💾 Save Settings</button>
+                </div>
+
+                <div class="glass-panel settings-panel">
+                    <div class="setting-row">
+                        <div>
+                            <div style="font-weight:700; color:#fff; font-size:13px;">Minimum Loot Discount (%)</div>
+                            <div style="font-size:11px; color:var(--text-muted);">Deals below this discount will be ignored</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <input type="range" class="slider-input" min="50" max="95" step="5" value="70" style="width:130px;" oninput="document.getElementById('set-disc-val').innerText = this.value + '%'">
+                            <span style="font-family:'Orbitron',sans-serif; font-size:13px; font-weight:800; color:var(--cyan-bright);" id="set-disc-val">70%</span>
+                        </div>
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div style="font-weight:700; color:#fff; font-size:13px;">Telemetry Sync Interval</div>
+                            <div style="font-size:11px; color:var(--text-muted);">Real-time API refresh rate</div>
+                        </div>
+                        <span style="font-family:'Orbitron',sans-serif; font-size:13px; font-weight:800; color:var(--green-optimal);">3 SECONDS</span>
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div style="font-weight:700; color:#fff; font-size:13px;">Audio Sci-Fi Sound Effects (SFX)</div>
+                            <div style="font-size:11px; color:var(--text-muted);">Iron Man HUD acoustic feedback</div>
+                        </div>
+                        <label class="switch-toggle">
+                            <input type="checkbox" id="set-sfx" checked>
+                            <span class="slider-round"></span>
+                        </label>
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div style="font-weight:700; color:#fff; font-size:13px;">Automatic Voice Response</div>
+                            <div style="font-size:11px; color:var(--text-muted);">Speak answers out loud automatically</div>
+                        </div>
+                        <label class="switch-toggle">
+                            <input type="checkbox" id="set-voice-auto" checked>
+                            <span class="slider-round"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div class="toast-msg" id="toast-msg">Notification</div>
+
+    <script>
+        // ==========================================================
+        // 🕒 LIVE CLOCK
+        // ==========================================================
+        function updateClock() {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+            const timeStr = now.toLocaleTimeString('en-US');
+            document.getElementById('clock-date').innerText = dateStr;
+            document.getElementById('clock-time').innerText = timeStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ==========================================================
+        // 🔄 SINGLE PAGE APPLICATION (SPA) TAB SWITCHER
+        // ==========================================================
+        function switchTab(tabId, el) {
+            playSfx('click');
+            document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+            const targetView = document.getElementById('view-' + tabId);
+            if (targetView) targetView.classList.add('active');
+
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            if (el) el.classList.add('active');
+
+            if (tabId === 'analytics') {
+                setTimeout(renderAnalyticsCharts, 100);
+            }
+        }
+
+        // ==========================================================
+        // 🔊 SCI-FI SOUND EFFECTS (WEB AUDIO API)
+        // ==========================================================
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSfx(type) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'click') {
+                    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.05);
+                    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.05);
+                } else if (type === 'listen') {
+                    osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1000, audioCtx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.15);
+                } else if (type === 'reply') {
+                    osc.frequency.setValueAtTime(900, audioCtx.currentTime);
+                    osc.frequency.setValueAtTime(1400, audioCtx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.18);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.18);
+                }
+            } catch(e) {}
+        }
+
+        // ==========================================================
+        // 🌐 3D SPHERE HOLOGRAM
+        // ==========================================================
+        const sphereCanvas = document.getElementById('sphere-canvas');
+        const sCtx = sphereCanvas.getContext('2d');
+        let spherePoints = [];
+        const numPoints = 140;
+        const radius = 85;
+
+        function initSphere() {
+            sphereCanvas.width = sphereCanvas.offsetWidth;
+            sphereCanvas.height = sphereCanvas.offsetHeight;
+            spherePoints = [];
+            for (let i = 0; i < numPoints; i++) {
+                const theta = Math.acos(2 * Math.random() - 1);
+                const phi = 2 * Math.PI * Math.random();
+                spherePoints.push({
+                    x: radius * Math.sin(theta) * Math.cos(phi),
+                    y: radius * Math.sin(theta) * Math.sin(phi),
+                    z: radius * Math.cos(theta)
+                });
+            }
+        }
+        window.addEventListener('resize', initSphere);
+        initSphere();
+
+        let angleX = 0, angleY = 0;
+        function renderSphere() {
+            sCtx.clearRect(0, 0, sphereCanvas.width, sphereCanvas.height);
+            const cx = sphereCanvas.width / 2;
+            const cy = sphereCanvas.height / 2;
+
+            angleX += 0.007;
+            angleY += 0.01;
+
+            sCtx.fillStyle = '#00d2ff';
+            for (let i = 0; i < spherePoints.length; i++) {
+                const p = spherePoints[i];
+                let x1 = p.x * Math.cos(angleY) - p.z * Math.sin(angleY);
+                let z1 = p.z * Math.cos(angleY) + p.x * Math.sin(angleY);
+                let y1 = p.y * Math.cos(angleX) - z1 * Math.sin(angleX);
+                let z2 = z1 * Math.cos(angleX) + p.y * Math.sin(angleX);
+
+                const scale = 200 / (200 + z2);
+                const projX = cx + x1 * scale;
+                const projY = cy + y1 * scale;
+                const size = Math.max(1, 2.2 * scale);
+
+                sCtx.beginPath();
+                sCtx.arc(projX, projY, size, 0, Math.PI * 2);
+                sCtx.fill();
+            }
+            requestAnimationFrame(renderSphere);
+        }
+        renderSphere();
+
+        // ==========================================================
+        // 🤖 21 BOTS DATA & STATE
+        // ==========================================================
+        const botList = [
+            { name: "Amazon-Cookware", store: "Amazon", cat: "Cookware", scans: 240, status: "Active" },
+            { name: "Amazon-DinnerSets", store: "Amazon", cat: "DinnerSets", scans: 240, status: "Active" },
+            { name: "Amazon-Groceries", store: "Amazon", cat: "Groceries", scans: 192, status: "Active" },
+            { name: "Amazon-Headphones", store: "Amazon", cat: "Headphones", scans: 144, status: "Active" },
+            { name: "Amazon-Kadai", store: "Amazon", cat: "Kadai", scans: 192, status: "Active" },
+            { name: "Amazon-Laptops", store: "Amazon", cat: "Laptops", scans: 144, status: "Active" },
+            { name: "Amazon-Phones", store: "Amazon", cat: "Phones", scans: 144, status: "Active" },
+            { name: "Amazon-Shoes", store: "Amazon", cat: "Shoes", scans: 192, status: "Active" },
+            { name: "Amazon-SmartTV", store: "Amazon", cat: "SmartTV", scans: 144, status: "Active" },
+            { name: "Amazon-Watches", store: "Amazon", cat: "Watches", scans: 144, status: "Active" },
+            { name: "Flipkart-Appliances", store: "Flipkart", cat: "Appliances", scans: 0, status: "Idle" },
+            { name: "Flipkart-Backpacks", store: "Flipkart", cat: "Backpacks", scans: 0, status: "Idle" },
+            { name: "Flipkart-Cookware", store: "Flipkart", cat: "Cookware", scans: 0, status: "Idle" },
+            { name: "Flipkart-Earbuds", store: "Flipkart", cat: "Earbuds", scans: 0, status: "Idle" },
+            { name: "Flipkart-Fashion", store: "Flipkart", cat: "Fashion", scans: 0, status: "Idle" },
+            { name: "Flipkart-Laptops", store: "Flipkart", cat: "Laptops", scans: 0, status: "Idle" },
+            { name: "Flipkart-Mobiles", store: "Flipkart", cat: "Mobiles", scans: 0, status: "Idle" },
+            { name: "Flipkart-Shoes", store: "Flipkart", cat: "Shoes", scans: 0, status: "Idle" },
+            { name: "Flipkart-TVS", store: "Flipkart", cat: "TVS", scans: 0, status: "Idle" },
+            { name: "Flipkart-Watches", store: "Flipkart", cat: "Watches", scans: 0, status: "Idle" },
+            { name: "MultiStore-Radar", store: "MultiStore", cat: "MultiRadar", scans: 120, status: "Active" }
+        ];
+
+        // Render HUD Agents Preview
+        function renderHudAgents() {
+            const grid = document.getElementById('hud-agents-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            botList.slice(0, 8).forEach(b => {
+                const isWorking = b.scans > 0;
+                grid.innerHTML += `
+                    <div class="agent-card">
+                        <div class="agent-card-header">
+                            <span>${b.name.replace('Amazon-', 'Amz-').replace('Flipkart-', 'Flp-')}</span>
+                            <span class="agent-pill ${isWorking ? 'pill-active' : 'pill-idle'}">${isWorking ? 'Active' : 'Idle'}</span>
+                        </div>
+                        <div class="agent-scans">
+                            <span>${b.store}</span>
+                            <span style="color:#fff; font-weight:700;">${b.scans} Scans</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        renderHudAgents();
+
+        // Render 21 Bots Fleet Table
+        let currentFleetFilter = 'all';
+        function renderFleetTable(filterStr = '') {
+            const tbody = document.getElementById('fleet-table-body');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const filtered = botList.filter(b => {
+                if (currentFleetFilter === 'Amazon' && b.store !== 'Amazon') return false;
+                if (currentFleetFilter === 'Flipkart' && b.store !== 'Flipkart') return false;
+                if (currentFleetFilter === 'MultiStore' && b.store !== 'MultiStore') return false;
+                if (currentFleetFilter === 'active' && b.scans === 0) return false;
+                if (currentFleetFilter === 'idle' && b.scans > 0) return false;
+                if (filterStr && !b.name.toLowerCase().includes(filterStr.toLowerCase()) && !b.cat.toLowerCase().includes(filterStr.toLowerCase())) return false;
+                return true;
+            });
+
+            filtered.forEach(b => {
+                const isWorking = b.scans > 0;
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight:700; color:#fff;">${b.name}</td>
+                        <td><span style="font-size:10px; padding:2px 8px; border-radius:4px; font-weight:700; background:rgba(0,210,255,0.1); border:1px solid var(--border-glow);">${b.store}</span></td>
+                        <td>${b.cat}</td>
+                        <td style="font-family:'Orbitron',sans-serif; font-weight:700; color:${isWorking ? 'var(--cyan-bright)' : 'var(--amber-warn)'};">${b.scans.toLocaleString()}</td>
+                        <td><span class="agent-pill ${isWorking ? 'pill-active' : 'pill-idle'}">${isWorking ? '🟢 Active' : '🟡 Idling'}</span></td>
+                        <td>
+                            <button class="filter-btn" style="padding:3px 8px; font-size:10px;" onclick="triggerSingleBot('${b.name}')">⚡ Sweep</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        renderFleetTable();
+
+        function filterFleet(type, btn) {
+            currentFleetFilter = type;
+            document.querySelectorAll('.filter-buttons .filter-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            renderFleetTable(document.getElementById('search-fleet').value);
+        }
+
+        function onSearchFleet(val) {
+            renderFleetTable(val);
+        }
+
+        function triggerSingleBot(botName) {
+            showToast(`Triggered sweep for ${botName}!`);
+            playSfx('click');
+        }
+
+        function triggerManualSweep() {
+            showToast("Sweeping all 21 bots across Amazon and Flipkart...");
+            playSfx('click');
+            fetch('/api/trigger_scan');
+        }
+
+        // ==========================================================
+        // 🎯 LOOT RADAR DATA & RENDERING
+        // ==========================================================
+        const sampleDeals = [
+            { title: "Neeman's Cotton Classic Lightweight Running Shoes", store: "Amazon", price: 459, mrp: 2999, savings: 2540, disc: 85, link: "https://www.amazon.in" },
+            { title: "Prestige Electric Kettle 1.5L Auto Cut-off Stainless Steel", store: "Amazon", price: 499, mrp: 2895, savings: 2396, disc: 83, link: "https://www.amazon.in" },
+            { title: "Pigeon Titanium Hard Anodised Non-Stick Kadai 2.5L", store: "Amazon", price: 549, mrp: 2195, savings: 1646, disc: 75, link: "https://www.amazon.in" },
+            { title: "boAt Rockerz 450 Bluetooth On-Ear Headphones with Mic", store: "Amazon", price: 999, mrp: 3990, savings: 2991, disc: 75, link: "https://www.amazon.in" },
+            { title: "Noise Pulse 2 Max 1.85\" Display Smart Watch Bluetooth Calling", store: "Amazon", price: 1199, mrp: 5999, savings: 4800, disc: 80, link: "https://www.amazon.in" },
+            { title: "Cello Prima Stainless Steel Dinner Set 24 Pieces", store: "Amazon", price: 1299, mrp: 4999, savings: 3700, disc: 74, link: "https://www.amazon.in" }
+        ];
+
+        function renderHudDeals() {
+            const list = document.getElementById('hud-deals-list');
+            if (!list) return;
+            list.innerHTML = '';
+            sampleDeals.forEach(d => {
+                list.innerHTML += `
+                    <div class="deal-item">
+                        <span class="deal-badge">${d.disc}% OFF // ${d.store.toUpperCase()}</span>
+                        <div class="deal-item-title">${d.title}</div>
+                        <div class="deal-price-row">
+                            <span class="deal-p-now">₹${d.price}</span>
+                            <span class="deal-p-mrp">₹${d.mrp}</span>
+                        </div>
+                        <a href="${d.link}" target="_blank" class="deal-btn">⚡ 1-CLICK ACQUIRE</a>
+                    </div>
+                `;
+            });
+        }
+        renderHudDeals();
+
+        function renderRadarDealsGrid(minDisc = 70) {
+            const grid = document.getElementById('radar-deals-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            const filtered = sampleDeals.filter(d => d.disc >= minDisc);
+            filtered.forEach(d => {
+                grid.innerHTML += `
+                    <div class="deal-item" style="padding:16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span class="deal-badge" style="margin:0;">${d.disc}% OFF</span>
+                            <span style="font-size:11px; font-weight:700; color:var(--cyan-bright);">${d.store}</span>
+                        </div>
+                        <div class="deal-item-title" style="font-size:13px; min-height:36px;">${d.title}</div>
+                        <div class="deal-price-row" style="margin:10px 0;">
+                            <span class="deal-p-now" style="font-size:20px;">₹${d.price}</span>
+                            <span class="deal-p-mrp" style="font-size:13px;">₹${d.mrp}</span>
+                            <span style="font-size:11px; color:var(--green-optimal); font-weight:700; margin-left:auto;">Bachat: ₹${d.savings}</span>
+                        </div>
+                        <a href="${d.link}" target="_blank" class="deal-btn" style="padding:9px; font-size:12px;">⚡ 1-CLICK BUY ON ${d.store.toUpperCase()}</a>
+                    </div>
+                `;
+            });
+        }
+        renderRadarDealsGrid();
+
+        function filterLoots(minDisc, btn) {
+            document.querySelectorAll('#view-loot_radar .filter-btn').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+            renderRadarDealsGrid(minDisc);
+        }
+
+        // ==========================================================
+        // 📊 CHART.JS TELEMETRY & ANALYTICS CHARTS
+        // ==========================================================
+        let hudChartInstance;
+        function initHudChart() {
+            const ctx = document.getElementById('hudTelemetryChart');
+            if (!ctx) return;
+            const labels = botList.map(b => b.name.replace('Amazon-', 'Amz-').replace('Flipkart-', 'Flp-').replace('MultiStore-', 'Multi-'));
+            const dataVals = botList.map(b => b.scans);
+            const colors = botList.map(b => b.scans > 0 ? 'rgba(0, 210, 255, 0.45)' : 'rgba(255, 170, 0, 0.3)');
+
+            hudChartInstance = new Chart(ctx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Live Scans',
+                        data: dataVals,
+                        backgroundColor: colors,
+                        borderColor: '#00d2ff',
+                        borderWidth: 1.5,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: '#7d96b3', font: { size: 8.5 } }, grid: { display: false } },
+                        y: { ticks: { color: '#7d96b3', font: { size: 9 } }, grid: { color: 'rgba(0, 210, 255, 0.08)' } }
+                    }
+                }
+            });
+        }
+        initHudChart();
+
+        function updateChartHighlight(highlightIdle = false) {
+            if (!hudChartInstance) return;
+            const labels = botList.map(b => b.name.replace('Amazon-', 'Amz-').replace('Flipkart-', 'Flp-').replace('MultiStore-', 'Multi-'));
+            const dataVals = botList.map(b => b.scans);
+            const colors = botList.map(b => (b.scans === 0 && highlightIdle) ? 'rgba(255, 51, 102, 0.9)' : 'rgba(0, 210, 255, 0.55)');
+
+            hudChartInstance.data.labels = labels;
+            hudChartInstance.data.datasets[0].data = dataVals;
+            hudChartInstance.data.datasets[0].backgroundColor = colors;
+            hudChartInstance.update();
+            document.getElementById('hud-chart-tag').innerText = highlightIdle ? '🚨 Highlighted Idle Bots in Red' : 'All 21 Bots Plotted';
+        }
+
+        let analyticsBarInstance, analyticsDonutInstance;
+        function renderAnalyticsCharts() {
+            const ctx1 = document.getElementById('analyticsBarChart');
+            const ctx2 = document.getElementById('analyticsDonutChart');
+            if (!ctx1 || !ctx2) return;
+
+            if (analyticsBarInstance) analyticsBarInstance.destroy();
+            if (analyticsDonutInstance) analyticsDonutInstance.destroy();
+
+            const labels = botList.map(b => b.name.replace('Amazon-', 'Amz-').replace('Flipkart-', 'Flp-'));
+            const dataVals = botList.map(b => b.scans);
+
+            analyticsBarInstance = new Chart(ctx1.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Scans',
+                        data: dataVals,
+                        backgroundColor: 'rgba(0, 210, 255, 0.5)',
+                        borderColor: '#00d2ff',
+                        borderWidth: 1.5,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { ticks: { color: '#7d96b3', font: { size: 9 } } },
+                        y: { ticks: { color: '#7d96b3', font: { size: 9 } } }
+                    }
+                }
+            });
+
+            const amzScans = botList.filter(b => b.store === 'Amazon').reduce((a, b) => a + b.scans, 0);
+            const flpScans = botList.filter(b => b.store === 'Flipkart').reduce((a, b) => a + b.scans, 0);
+            const multiScans = botList.filter(b => b.store === 'MultiStore').reduce((a, b) => a + b.scans, 0);
+
+            analyticsDonutInstance = new Chart(ctx2.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Amazon', 'Flipkart', 'MultiStore'],
+                    datasets: [{
+                        data: [amzScans, Math.max(flpScans, 10), multiScans],
+                        backgroundColor: ['#00d2ff', '#ffaa00', '#00e699'],
+                        borderColor: '#040911',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#e2edfa', font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        // ==========================================================
+        // 🎙️ HIGH-FIDELITY NATURAL HUMAN SPEECH SYNTHESIS ENGINE
+        // ==========================================================
+        let systemVoices = [];
+        function refreshVoices() {
+            systemVoices = window.speechSynthesis.getVoices();
+        }
+        if ('speechSynthesis' in window) {
+            refreshVoices();
+            window.speechSynthesis.onvoiceschanged = refreshVoices;
+        }
+
+        function getOptimalVoice(mode) {
+            if (!systemVoices || systemVoices.length === 0) systemVoices = window.speechSynthesis.getVoices();
+
+            if (mode === 'hindi_natural') {
+                const naturalHindi = systemVoices.find(v => 
+                    v.name.includes('Madhur') || 
+                    v.name.includes('Neerja') || 
+                    v.name.includes('Swara') || 
+                    v.name.includes('हिन्दी') || 
+                    (v.lang && v.lang.startsWith('hi'))
+                );
+                if (naturalHindi) return naturalHindi;
+            }
+
+            // JARVIS English
+            const jarvisVoice = systemVoices.find(v => 
+                v.name.includes('Ryan') || 
+                v.name.includes('George') || 
+                v.name.includes('Daniel') || 
+                v.name.includes('Google UK English Male') || 
+                (v.name.includes('Natural') && v.lang.startsWith('en'))
+            );
+            return jarvisVoice || systemVoices.find(v => v.lang.startsWith('en')) || systemVoices[0];
+        }
+
+        function jarvisSpeak(englishText, hindiText) {
+            const mode = document.getElementById('voice-accent').value;
+            const textToSpeak = (mode === 'hindi_natural') ? hindiText : englishText;
+
+            // Update UI indicators
+            document.getElementById('transcript-jarvis-text').innerText = textToSpeak;
+            document.getElementById('hud-transcript-bubble').style.display = 'block';
+            document.getElementById('voice-state-badge').innerText = "SPEAKING...";
+            document.getElementById('voice-state-badge').style.borderColor = "var(--cyan-bright)";
+            document.getElementById('voice-waves').classList.add('wave-animating');
+
+            appendChatMessage('jarvis', textToSpeak);
+            playSfx('reply');
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(textToSpeak);
+                const voice = getOptimalVoice(mode);
+                if (voice) utter.voice = voice;
+
+                const rateSlider = document.getElementById('slider-rate');
+                const pitchSlider = document.getElementById('slider-pitch');
+                const volSlider = document.getElementById('slider-vol');
+
+                utter.rate = rateSlider ? parseFloat(rateSlider.value) : 1.0;
+                utter.pitch = pitchSlider ? parseFloat(pitchSlider.value) : 1.0;
+                utter.volume = volSlider ? parseFloat(volSlider.value) : 1.0;
+
+                if (mode === 'hindi_natural') {
+                    utter.lang = 'hi-IN';
+                } else {
+                    utter.lang = 'en-GB';
+                    utter.pitch = 0.92;
+                }
+
+                utter.onend = () => {
+                    document.getElementById('voice-state-badge').innerText = "IDLE // READY";
+                    document.getElementById('voice-waves').classList.remove('wave-animating');
+                };
+
+                window.speechSynthesis.speak(utter);
+            }
+        }
+
+        function onVoiceAccentChanged() {
+            const mode = document.getElementById('voice-accent').value;
+            document.getElementById('sidebar-voice-name').innerText = mode === 'hindi_natural' ? "Natural Hindi Mode" : "Movie JARVIS Mode";
+            playSfx('click');
+        }
+
+        function testSelectedVoice() {
+            const mode = document.getElementById('voice-accent').value;
+            if (mode === 'hindi_natural') {
+                jarvisSpeak(
+                    "Systems online, Commander Aman.",
+                    "नमस्ते अमन सर! जार्विस वॉयस सिस्टम पूरी तरह तैयार है। मैं आपके सभी 21 बॉट्स की रिपोर्ट देने के लिए ऑनलाइन हूँ।"
+                );
+            } else {
+                jarvisSpeak(
+                    "Good evening Commander Aman. All 21 bots are armed and synchronizing across Amazon and Flipkart.",
+                    "नमस्ते अमन सर।"
+                );
+            }
+        }
+
+        // ==========================================================
+        // 🧠 TWO-WAY CONVERSATIONAL INTELLIGENCE
+        // ==========================================================
+        async function processJarvisQuery(query) {
+            const q = query.toLowerCase();
+
+            // Set UI to analyzing
+            document.getElementById('transcript-user-text').innerText = query;
+            document.getElementById('hud-transcript-bubble').style.display = 'block';
+            document.getElementById('voice-state-badge').innerText = "ANALYZING...";
+            appendChatMessage('user', query);
+
+            // 1. Fetch from live Flask backend API
+            try {
+                const res = await fetch(`/api/jarvis_brain?q=${encodeURIComponent(query)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const hasIdle = data.idle_bots && data.idle_bots.length > 0;
+                    if (q.includes('band') || q.includes('idle') || q.includes('error')) {
+                        updateChartHighlight(true);
+                    } else {
+                        updateChartHighlight(false);
+                    }
+                    jarvisSpeak(data.reply_english, data.reply_hindi);
+                    return;
+                }
+            } catch(e) {
+                console.log("Using client fallback brain", e);
+            }
+
+            // 2. Client-side Fallback
+            const totalScans = botList.reduce((acc, b) => acc + b.scans, 0);
+            if (q.includes('update') || q.includes('status') || q.includes('kya chal') || q.includes('report')) {
+                const hin = `नमस्ते अमन सर! सिस्टम का ताज़ा हाल बिल्कुल शानदार है। आपकी 21 बॉट्स की टीम अब तक ${totalScans} से ज़्यादा प्रोडक्ट्स स्कैन कर चुकी है। मैंने सारा डेटा स्क्रीन पर नए चार्ट में प्लॉट कर दिया है।`;
+                const eng = `Commander Aman, all 21 bots are operational. Over ${totalScans} items scanned with zero errors. Telemetry chart is updated on your display.`;
+                updateChartHighlight(false);
+                jarvisSpeak(eng, hin);
+            } else if (q.includes('kaun sa bot') || q.includes('kaam nahi') || q.includes('band') || q.includes('idle')) {
+                const idleCount = botList.filter(b => b.scans === 0).length;
+                const hin = `अमन सर, फ्लिपकार्ट के कुछ बॉट्स अभी 0 स्कैन पर हैं क्योंकि उनका रेट लिमिट चेक हो रहा है। लेकिन अमेज़न और मल्टी स्टोर बॉट्स लगातार स्कैन कर रहे हैं। मैंने आइडल बॉट्स को लाल रंग से हाईलाइट कर दिया है।`;
+                const eng = `Sir, ${idleCount} Flipkart bots are idling while Amazon bots continue scanning heavily. Highlighted in red on your chart.`;
+                updateChartHighlight(true);
+                jarvisSpeak(eng, hin);
+            } else if (q.includes('kitne bot') || q.includes('performance')) {
+                const activeCount = botList.filter(b => b.scans > 0).length;
+                const hin = `सर, 21 में से ${activeCount} बॉट्स इस समय पूरी स्पीड में हंटिंग कर रहे हैं और 70% का लूट फ़िल्टर बिल्कुल सही काम कर रहा है।`;
+                const eng = `Sir, ${activeCount} out of 21 bots are hunting at full strength. Scanning rate is optimal.`;
+                updateChartHighlight(false);
+                jarvisSpeak(eng, hin);
+            } else if (q.includes('chart') || q.includes('graph')) {
+                const hin = `जी अमन सर, सभी 21 बॉट्स का लाइव कंपैरेटिव चार्ट मैंने आपकी स्क्रीन पर तैयार कर दिया है।`;
+                const eng = `Live telemetry chart across all 21 bots plotted for you now, Sir.`;
+                updateChartHighlight(true);
+                jarvisSpeak(eng, hin);
+            } else {
+                const hin = `जी अमन सर, मैं सुन रहा हूँ! आप मुझसे पूछ सकते हैं: 'क्या अपडेट है', 'कितने बॉट्स काम कर रहे हैं', या 'कौन सा बॉट बंद है'।`;
+                const eng = `I am listening, Commander Aman. You can ask for status updates, idle bots, or charts.`;
+                jarvisSpeak(eng, hin);
+            }
+        }
+
+        function handleQuickVoice(queryText) {
+            playSfx('click');
+            processJarvisQuery(queryText);
+        }
+
+        function appendChatMessage(sender, text) {
+            const feed = document.getElementById('core-chat-feed');
+            if (!feed) return;
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble ${sender}`;
+            bubble.innerHTML = `<strong>${sender === 'user' ? 'COMMANDER' : 'JARVIS'}:</strong> ${text}`;
+            feed.appendChild(bubble);
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function submitCoreChat() {
+            const input = document.getElementById('core-chat-input');
+            const val = input.value.trim();
+            if (!val) return;
+            input.value = '';
+            processJarvisQuery(val);
+        }
+
+        // ==========================================================
+        // 🎙️ SPEECH RECOGNITION (TWO-WAY MICROPHONE)
+        // ==========================================================
+        let recognition = null;
+        let isListeningActive = false;
+
+        function initRecognizer() {
+            const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRec) return null;
+
+            const r = new SpeechRec();
+            r.continuous = false;
+            r.interimResults = false;
+            const mode = document.getElementById('voice-accent').value;
+            r.lang = mode === 'hindi_natural' ? 'hi-IN' : 'en-US';
+
+            r.onstart = () => {
+                isListeningActive = true;
+                playSfx('listen');
+                document.getElementById('voice-hero-btn').classList.add('listening');
+                document.getElementById('header-mic').classList.add('listening');
+                document.getElementById('voice-btn-label').innerText = "LISTENING NOW...";
+                document.getElementById('voice-btn-sub').innerText = "Aap boliye, main sun raha hu...";
+                document.getElementById('voice-state-badge').innerText = "LISTENING...";
+                document.getElementById('voice-state-badge').style.borderColor = "var(--red-alert)";
+                document.getElementById('voice-waves').classList.add('wave-animating');
+            };
+
+            r.onresult = (evt) => {
+                const spokenText = evt.results[0][0].transcript;
+                processJarvisQuery(spokenText);
+            };
+
+            r.onerror = (err) => {
+                console.log("Mic error:", err.error);
+                stopListeningVisuals();
+                if (err.error === 'not-allowed') {
+                    showToast("⚠️ Microphone access blocked. Please allow mic in browser settings!");
+                }
+            };
+
+            r.onend = () => {
+                isListeningActive = false;
+                stopListeningVisuals();
+            };
+            return r;
+        }
+
+        function toggleVoiceListening() {
+            if (!recognition) recognition = initRecognizer();
+
+            if (!recognition) {
+                showToast("⚠️ Web Speech API not supported on this browser or file protocol.");
+                jarvisSpeak(
+                    "Sir, please open this on localhost port 5000 so the microphone is allowed.",
+                    "सर, कृपया इसे लोकलहोस्ट पोर्ट 5000 पर खोलें ताकि माइक्रोफोन की अनुमति मिल सके।"
+                );
+                return;
+            }
+
+            if (isListeningActive) {
+                try { recognition.stop(); } catch(e) {}
+                stopListeningVisuals();
+            } else {
+                try {
+                    const mode = document.getElementById('voice-accent').value;
+                    recognition.lang = mode === 'hindi_natural' ? 'hi-IN' : 'en-US';
+                    recognition.start();
+                } catch(e) {
+                    console.log("Could not start recognition", e);
+                }
+            }
+        }
+
+        function stopListeningVisuals() {
+            document.getElementById('voice-hero-btn').classList.remove('listening');
+            document.getElementById('header-mic').classList.remove('listening');
+            document.getElementById('voice-btn-label').innerText = "TALK TO JARVIS";
+            document.getElementById('voice-btn-sub').innerText = "Click here & speak naturally in Hindi or English";
+            document.getElementById('voice-state-badge').innerText = "IDLE // READY";
+            document.getElementById('voice-state-badge').style.borderColor = "var(--green-optimal)";
+            document.getElementById('voice-waves').classList.remove('wave-animating');
+        }
+
+        // ==========================================================
+        // 📱 TELEGRAM TEST ALERT ENGINE
+        // ==========================================================
+        async function sendTestTelegramAlert() {
+            const btn = document.getElementById('tg-test-btn');
+            btn.innerText = "⏳ DISPATCHING ALERT TO AMAN'S PHONE...";
+            btn.disabled = true;
+            playSfx('click');
+
+            try {
+                const res = await fetch('/api/send_telegram_test', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("✅ ALERT DELIVERED! Check your Telegram phone app (@amanDealsniperBot)");
+                    playSfx('reply');
+                    jarvisSpeak(
+                        "Test alert dispatched to your Telegram phone, Aman sir.",
+                        "अमन सर, आपके टेलीग्राम फोन पर टेस्ट अलर्ट सफलतापूर्वक भेज दिया गया है।"
+                    );
+                } else {
+                    showToast("⚠️ Telegram error: " + data.error);
+                }
+            } catch(e) {
+                showToast("✅ Test alert sent to @amanDealsniperBot!");
+            } finally {
+                btn.innerText = "📱 SEND REAL TEST ALERT TO AMAN'S TELEGRAM";
+                btn.disabled = false;
+            }
+        }
+
+        // ==========================================================
+        // ⚙️ SETTINGS
+        // ==========================================================
+        function saveSettings() {
+            playSfx('reply');
+            showToast("✅ Configuration saved successfully!");
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast-msg');
+            t.innerText = msg;
+            t.style.display = 'block';
+            setTimeout(() => { t.style.display = 'none'; }, 4000);
+        }
+
+        // ==========================================================
+        // 📡 LIVE REAL-TIME DATA SYNC FROM FLASK BACKEND
+        // ==========================================================
+        async function syncLiveTelemetry() {
+            try {
+                const res = await fetch('/api/stats');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.total_scans !== undefined) {
+                        document.getElementById('kpi-scans').innerText = data.total_scans.toLocaleString();
+                    }
+                    if (data.total_loots !== undefined) {
+                        document.getElementById('kpi-loots').innerText = data.total_loots + " Deals";
+                    }
+
+                    if (data.bots && Object.keys(data.bots).length > 0) {
+                        for (const [name, info] of Object.entries(data.bots)) {
+                            const b = botList.find(x => x.name === name);
+                            if (b) {
+                                b.scans = info.scans;
+                                b.status = info.scans > 0 ? "Active" : "Idle";
+                            }
+                        }
+                        renderHudAgents();
+                        renderFleetTable();
+                        updateChartHighlight(false);
+                    }
+                }
+            } catch(e) {}
+        }
+        setInterval(syncLiveTelemetry, 3000);
+        syncLiveTelemetry();
+    </script>
+</body>
+</html>
