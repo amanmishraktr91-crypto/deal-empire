@@ -1,0 +1,56 @@
+{
+  "admin_id": 6208434509,
+  "defense_active": true,
+  "authorized_members": {
+    "6208434509": {
+      "user_id": 6208434509,
+      "name": "Aman Mishra",
+      "username": "aman_mishra",
+      "role": "SUPER_ADMIN",
+      "added_at": "SYSTEM_INIT",
+      "approved_by": "System Master"
+    }
+  },
+  "pending_requests": {},
+  "blocked_users": {
+    "9988776655": {
+      "user_id": 9988776655,
+      "name": "Test VIP Member",
+      "username": "",
+      "revoked_at": "2026-09-21 22:59:44"
+    }
+  },
+  "security_logs": [
+    {
+      "timestamp": "2026-09-21 22:38:00",
+      "level": "SUCCESS",
+      "event": "🛡️ JARVIS Iron Dome Activated",
+      "details": "All 5 Security Sentinels armed & monitoring @amanDealsniperBot channel."
+    },
+    {
+      "timestamp": "2026-09-21 22:59:24",
+      "level": "INFO",
+      "event": "Security Test Dispatched",
+      "details": "Sent test alert to Commander Aman's phone"
+    },
+    {
+      "timestamp": "2026-09-21 22:59:33",
+      "level": "SUCCESS",
+      "event": "Manual Whitelist",
+      "details": "User Test VIP Member (9988776655) manually whitelisted."
+    },
+    {
+      "timestamp": "2026-09-21 22:59:44",
+      "level": "ALERT",
+      "event": "Access Revoked",
+      "details": "Access for user 9988776655 revoked by Commander Aman."
+    }
+  ],
+  "stats": {
+    "total_join_requests": 0,
+    "approved_count": 1,
+    "rejected_count": 0,
+    "intrusions_blocked": 0,
+    "protected_deals_dispatched": 246
+  }
+}
