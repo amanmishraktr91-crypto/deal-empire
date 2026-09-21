@@ -525,6 +525,259 @@
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
+
+        /* SECURITY SHIELD (IRON-DOME) STYLES */
+        .sec-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 16px;
+        }
+        @media (max-width: 1020px) {
+            .sec-grid { grid-template-columns: 1fr; }
+        }
+        .sec-panel {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .sec-panel-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-glow);
+        }
+        .sec-pending-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .sec-pending-card {
+            background: rgba(8, 22, 40, 0.85);
+            border: 1px solid rgba(255, 170, 0, 0.35);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: 0.2s;
+        }
+        .sec-pending-card:hover {
+            border-color: var(--amber-warn);
+            box-shadow: 0 0 16px rgba(255, 170, 0, 0.2);
+        }
+        .sec-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .sec-user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sec-user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(0, 210, 255, 0.2), rgba(0, 230, 153, 0.3));
+            border: 1.5px solid var(--cyan-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            color: #fff;
+        }
+        .sec-user-name {
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .sec-user-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+        .sec-card-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .btn-sec-approve {
+            background: linear-gradient(90deg, rgba(0, 230, 153, 0.2), rgba(0, 230, 153, 0.4));
+            border: 1px solid var(--green-optimal);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.2s;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+        }
+        .btn-sec-approve:hover {
+            background: var(--green-optimal);
+            color: #000;
+            box-shadow: 0 0 16px var(--green-optimal);
+        }
+        .btn-sec-reject {
+            background: linear-gradient(90deg, rgba(255, 51, 102, 0.2), rgba(255, 51, 102, 0.4));
+            border: 1px solid var(--red-alert);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.2s;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+        }
+        .btn-sec-reject:hover {
+            background: var(--red-alert);
+            color: #fff;
+            box-shadow: 0 0 16px var(--red-alert);
+        }
+        .sec-empty-state {
+            padding: 30px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            background: rgba(5, 14, 26, 0.5);
+            border: 1px dashed var(--border-glow);
+            border-radius: 8px;
+        }
+        .sec-quick-add-form {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .sec-input {
+            background: rgba(5, 12, 22, 0.9);
+            border: 1px solid var(--border-glow);
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #fff;
+            font-size: 12px;
+            outline: none;
+            flex: 1;
+            min-width: 140px;
+        }
+        .sec-input:focus { border-color: var(--cyan-primary); }
+        .sec-btn-add {
+            background: var(--cyan-primary);
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: 'Orbitron', sans-serif;
+        }
+        .sec-btn-add:hover {
+            background: var(--cyan-bright);
+            box-shadow: 0 0 14px var(--cyan-primary);
+        }
+        .sec-table-wrap {
+            max-height: 380px;
+            overflow-y: auto;
+        }
+        .sec-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .sec-table th {
+            text-align: left;
+            padding: 8px 10px;
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border-glow);
+            background: rgba(4, 10, 18, 0.6);
+            position: sticky;
+            top: 0;
+        }
+        .sec-table td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(0, 210, 255, 0.08);
+            color: var(--text-main);
+        }
+        .sec-table tr:hover { background: rgba(0, 210, 255, 0.04); }
+        .btn-sec-revoke {
+            background: transparent;
+            border: 1px solid rgba(255, 51, 102, 0.5);
+            color: var(--red-alert);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-sec-revoke:hover {
+            background: var(--red-alert);
+            color: #fff;
+        }
+        .sentinel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        .sentinel-card {
+            background: rgba(6, 16, 28, 0.8);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 8px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .sentinel-card-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .sec-terminal {
+            background: #020509;
+            border: 1px solid var(--border-glow);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .sec-terminal-line { line-height: 1.4; }
+        .sec-log-SUCCESS { color: var(--green-optimal); }
+        .sec-log-WARN { color: var(--amber-warn); }
+        .sec-log-ALERT { color: var(--red-alert); }
+        .sec-log-INFO { color: var(--cyan-bright); }
     </style>
 </head>
 <body>
@@ -590,6 +843,10 @@
                 <div class="nav-item" onclick="switchTab('telegram_alert', this)">
                     <div class="nav-left"><span>📱</span> Telegram Alert</div>
                     <span class="nav-badge" style="color:var(--green-optimal);">ARMED</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('security_shield', this)">
+                    <div class="nav-left"><span>🛡️</span> Security Shield</div>
+                    <span class="nav-badge" style="color:var(--green-optimal);" id="sidebar-sec-badge">IRON DOME</span>
                 </div>
                 <div class="nav-item" onclick="switchTab('settings', this)">
                     <div class="nav-left"><span>⚙️</span> Settings</div>
@@ -953,10 +1210,183 @@
                         </div>
                     </div>
                 </div>
+            <!-- ========================================== -->
+            <!-- 🛡️ VIEW 7: SECURITY SHIELD (IRON-DOME) -->
+            <!-- ========================================== -->
+            <div class="tab-view" id="view-security_shield">
+                <div class="view-header">
+                    <div>
+                        <div class="view-title"><span>🛡️</span> JARVIS IRON-DOME // CHANNEL GATEKEEPER DEFENSE MATRIX</div>
+                        <div class="view-desc">Military-Grade Sentinel Network: No one can join channel or message bot without Commander Aman's personal 1-click authorization.</div>
+                    </div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button class="tg-btn-primary" style="padding:8px 16px; font-size:11px;" onclick="testTelegramSecurityAlert()">
+                            🔔 TEST PHONE INTRUSION ALERT
+                        </button>
+                        <button class="filter-btn" onclick="fetchSecurityTelemetry()">
+                            🔄 SYNC NOW
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TOP SECURITY KPIS -->
+                <div class="kpi-row">
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">IRON DOME DEFENSE</span>
+                        <span class="kpi-val" style="color:var(--green-optimal);">ARMED & ACTIVE</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Zero breaches detected</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">AUTHORIZED ROSTER</span>
+                        <span class="kpi-val" style="color:var(--cyan-bright);" id="sec-kpi-auth">1 Members</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Super Admin: Aman Mishra</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">PENDING JOIN QUEUE</span>
+                        <span class="kpi-val" style="color:var(--amber-warn);" id="sec-kpi-pending">0 Candidates</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Quarantine perimeter locked</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">BLOCKED INTRUSIONS</span>
+                        <span class="kpi-val" style="color:var(--red-alert);" id="sec-kpi-intrusions">0 Attempts</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Firewall active 24/7</span>
+                    </div>
+                    <div class="glass-panel kpi-card">
+                        <span class="kpi-label">CONTENT ANTI-LEAK</span>
+                        <span class="kpi-val" style="color:var(--green-optimal);">ENFORCED</span>
+                        <span style="font-size:11px; color:var(--text-muted);">Anti-Forward & Anti-Copy</span>
+                    </div>
+                </div>
+
+                <!-- MAIN 2-COLUMN GRID -->
+                <div class="sec-grid">
+
+                    <!-- LEFT: PENDING JOIN REQUESTS QUEUE -->
+                    <div class="glass-panel sec-panel">
+                        <div class="sec-panel-title">
+                            <span>⏳ PENDING CHANNEL JOIN REQUESTS (QUARANTINE)</span>
+                            <span class="nav-badge" style="background:rgba(255,170,0,0.2); color:var(--amber-warn); border:1px solid var(--amber-warn);" id="sec-pending-badge">0 WAITING</span>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted);">
+                            Users who clicked your channel invite link are held here. They CANNOT enter until you click Approve.
+                        </div>
+
+                        <div class="sec-pending-list" id="sec-pending-list">
+                            <div class="sec-empty-state">
+                                🛡️ <b>Quarantine Queue is Clean</b><br>
+                                No pending join requests at this moment. Channel access is completely locked.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: AUTHORIZED MEMBERS ROSTER (WHITELIST) -->
+                    <div class="glass-panel sec-panel">
+                        <div class="sec-panel-title">
+                            <span>👥 AUTHORIZED MEMBERS ROSTER (WHITELIST)</span>
+                            <span class="nav-badge" style="background:rgba(0,230,153,0.15); color:var(--green-optimal);" id="sec-auth-badge">1 APPROVED</span>
+                        </div>
+
+                        <!-- QUICK WHITELIST FORM -->
+                        <div class="sec-quick-add-form">
+                            <input type="text" class="sec-input" id="sec-add-uid" placeholder="Telegram User ID (e.g. 6208434509)">
+                            <input type="text" class="sec-input" id="sec-add-name" placeholder="Member Name">
+                            <button class="sec-btn-add" onclick="manualWhitelistUser()">➕ WHITELIST</button>
+                        </div>
+
+                        <div class="sec-table-wrap">
+                            <table class="sec-table">
+                                <thead>
+                                    <tr>
+                                        <th>MEMBER</th>
+                                        <th>TELEGRAM ID</th>
+                                        <th>ROLE</th>
+                                        <th>STATUS</th>
+                                        <th>ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sec-whitelist-body">
+                                    <tr>
+                                        <td>
+                                            <div style="font-weight:700; color:#fff;">Aman Mishra</div>
+                                            <div style="font-size:10px; color:var(--cyan-bright);">@aman_mishra</div>
+                                        </td>
+                                        <td><code>6208434509</code></td>
+                                        <td><span class="status-pill" style="padding:2px 6px; font-size:9px;">SUPER_ADMIN</span></td>
+                                        <td><span style="color:var(--green-optimal); font-weight:700;">🟢 ACTIVE</span></td>
+                                        <td><span style="font-size:10px; color:var(--text-muted);">COMMANDER</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- MULTI-SENTINEL RADAR & FORENSIC AUDIT LOG -->
+                <div class="glass-panel sec-panel">
+                    <div class="sec-panel-title">
+                        <span>🛰️ MULTI-SENTINEL SECURITY FLEET (5 AUTONOMOUS UNITS)</span>
+                        <span class="status-pill">ALL SENTINELS ONLINE</span>
+                    </div>
+
+                    <div class="sentinel-grid">
+                        <div class="sentinel-card">
+                            <div class="sentinel-card-title">
+                                <span>Sentinel-01: Join Gatekeeper</span>
+                                <span class="status-dot"></span>
+                            </div>
+                            <div style="font-size:10px; color:var(--text-muted);">Traps <code>chat_join_request</code> & holds in quarantine</div>
+                            <span class="agent-pill pill-active" style="width:fit-content; margin-top:4px;">INTERCEPTING</span>
+                        </div>
+                        <div class="sentinel-card">
+                            <div class="sentinel-card-title">
+                                <span>Sentinel-02: Bot DM Firewall</span>
+                                <span class="status-dot"></span>
+                            </div>
+                            <div style="font-size:10px; color:var(--text-muted);">Blocks unauthorized users & pings Aman's phone</div>
+                            <span class="agent-pill pill-active" style="width:fit-content; margin-top:4px;">ACTIVE GUARD</span>
+                        </div>
+                        <div class="sentinel-card">
+                            <div class="sentinel-card-title">
+                                <span>Sentinel-03: Content Shield</span>
+                                <span class="status-dot"></span>
+                            </div>
+                            <div style="font-size:10px; color:var(--text-muted);">Anti-Forward, Anti-Copy, Anti-Screenshot enabled</div>
+                            <span class="agent-pill pill-active" style="width:fit-content; margin-top:4px;">ANTI-PIRACY</span>
+                        </div>
+                        <div class="sentinel-card">
+                            <div class="sentinel-card-title">
+                                <span>Sentinel-04: Whitelist Watchdog</span>
+                                <span class="status-dot"></span>
+                            </div>
+                            <div style="font-size:10px; color:var(--text-muted);">Maintains encrypted authorized roster in security DB</div>
+                            <span class="agent-pill pill-active" style="width:fit-content; margin-top:4px;">ENFORCING</span>
+                        </div>
+                        <div class="sentinel-card">
+                            <div class="sentinel-card-title">
+                                <span>Sentinel-05: Live Audit Radar</span>
+                                <span class="status-dot"></span>
+                            </div>
+                            <div style="font-size:10px; color:var(--text-muted);">Real-time forensic event telemetry & alarm logger</div>
+                            <span class="agent-pill pill-active" style="width:fit-content; margin-top:4px;">RECORDING</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <span style="font-size:11px; font-weight:800; color:var(--cyan-bright); letter-spacing:1px;">LIVE FORENSIC AUDIT TERMINAL:</span>
+                            <span style="font-size:10px; color:var(--text-muted);">Auto-scrolling // Live sync 3s</span>
+                        </div>
+                        <div class="sec-terminal" id="sec-audit-terminal">
+                            <div class="sec-terminal-line sec-log-SUCCESS">[SYSTEM] 🛡️ JARVIS Iron Dome Defense Matrix fully initialized. Zero breaches.</div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <!-- ========================================== -->
-            <!-- ⚙️ VIEW 7: SETTINGS -->
+            <!-- ⚙️ VIEW 8: SETTINGS -->
             <!-- ========================================== -->
             <div class="tab-view" id="view-settings">
                 <div class="view-header">
@@ -1738,6 +2168,249 @@
         }
 
         // ==========================================================
+        // 🛡️ SECURITY SHIELD CONTROLLER & TELEMETRY
+        // ==========================================================
+        async function fetchSecurityTelemetry() {
+            try {
+                const res = await fetch('/api/security/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.success) return;
+
+                // 1. Update KPIs
+                const authCount = (data.authorized_members || []).length;
+                const pendingCount = (data.pending_requests || []).length;
+                const intrusionsCount = (data.stats && data.stats.intrusions_blocked) || 0;
+
+                const authEl = document.getElementById('sec-kpi-auth');
+                if (authEl) authEl.innerText = `${authCount} Members`;
+
+                const pendEl = document.getElementById('sec-kpi-pending');
+                if (pendEl) pendEl.innerText = `${pendingCount} Candidates`;
+
+                const pendBadge = document.getElementById('sec-pending-badge');
+                if (pendBadge) pendBadge.innerText = `${pendingCount} WAITING`;
+
+                const authBadge = document.getElementById('sec-auth-badge');
+                if (authBadge) authBadge.innerText = `${authCount} APPROVED`;
+
+                const intrEl = document.getElementById('sec-kpi-intrusions');
+                if (intrEl) intrEl.innerText = `${intrusionsCount} Attempts`;
+
+                const sideBadge = document.getElementById('sidebar-sec-badge');
+                if (sideBadge) {
+                    sideBadge.innerText = pendingCount > 0 ? `${pendingCount} PENDING` : "IRON DOME";
+                    sideBadge.style.color = pendingCount > 0 ? "var(--amber-warn)" : "var(--green-optimal)";
+                }
+
+                // 2. Render Pending Requests Queue
+                const pendingList = document.getElementById('sec-pending-list');
+                if (pendingList) {
+                    if (!data.pending_requests || data.pending_requests.length === 0) {
+                        pendingList.innerHTML = `
+                            <div class="sec-empty-state">
+                                🛡️ <b>Quarantine Queue is Clean</b><br>
+                                No pending join requests at this moment. Channel gate is securely locked.
+                            </div>
+                        `;
+                    } else {
+                        pendingList.innerHTML = data.pending_requests.map(p => {
+                            const name = `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Candidate';
+                            const username = p.username ? `@${p.username}` : 'No username';
+                            const initials = name.substring(0, 2).toUpperCase();
+                            const uid = p.user_id;
+                            const chatId = p.chat_id || '';
+                            return `
+                                <div class="sec-pending-card">
+                                    <div class="sec-card-top">
+                                        <div class="sec-user-info">
+                                            <div class="sec-user-avatar">${initials}</div>
+                                            <div>
+                                                <div class="sec-user-name">${name}</div>
+                                                <div class="sec-user-sub">${username} // ID: <code>${uid}</code></div>
+                                            </div>
+                                        </div>
+                                        <span class="status-pill" style="border-color:rgba(255,170,0,0.4); color:var(--amber-warn); font-size:9px; padding:2px 8px;">QUARANTINED</span>
+                                    </div>
+                                    <div style="font-size:10px; color:var(--text-muted);">
+                                        Target: <b>${p.chat_title || 'Channel'}</b> • Requested: ${p.request_time || 'Just now'}
+                                    </div>
+                                    <div class="sec-card-actions">
+                                        <button class="btn-sec-approve" onclick="approvePendingUser('${uid}', '${chatId}')">
+                                            ✅ 1-CLICK APPROVE
+                                        </button>
+                                        <button class="btn-sec-reject" onclick="rejectPendingUser('${uid}', '${chatId}')">
+                                            ❌ 1-CLICK DECLINE
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                }
+
+                // 3. Render Whitelist Roster Table
+                const tbody = document.getElementById('sec-whitelist-body');
+                if (tbody && data.authorized_members) {
+                    tbody.innerHTML = data.authorized_members.map(m => {
+                        const isSuperAdmin = String(m.user_id) === String(data.admin_id || "6208434509");
+                        const roleBadge = isSuperAdmin 
+                            ? `<span class="status-pill" style="padding:2px 6px; font-size:9px;">SUPER_ADMIN</span>`
+                            : `<span style="font-size:10px; font-weight:700; color:var(--cyan-bright);">${m.role || 'MEMBER'}</span>`;
+                        const actionBtn = isSuperAdmin
+                            ? `<span style="font-size:10px; color:var(--text-muted); font-weight:700;">COMMANDER</span>`
+                            : `<button class="btn-sec-revoke" onclick="revokeUser('${m.user_id}')">🚫 Revoke</button>`;
+
+                        return `
+                            <tr>
+                                <td>
+                                    <div style="font-weight:700; color:#fff;">${m.name || 'Member'}</div>
+                                    <div style="font-size:10px; color:var(--text-muted);">${m.username ? '@' + m.username : 'ID: ' + m.user_id}</div>
+                                </td>
+                                <td><code>${m.user_id}</code></td>
+                                <td>${roleBadge}</td>
+                                <td><span style="color:var(--green-optimal); font-weight:700; font-size:11px;">🟢 ACTIVE</span></td>
+                                <td>${actionBtn}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+
+                // 4. Render Live Forensic Terminal
+                const terminal = document.getElementById('sec-audit-terminal');
+                if (terminal && data.security_logs) {
+                    terminal.innerHTML = data.security_logs.map(log => {
+                        const lvlClass = `sec-log-${log.level || 'INFO'}`;
+                        return `<div class="sec-terminal-line"><span style="color:var(--text-muted);">[${log.timestamp || ''}]</span> <span class="${lvlClass}">[${log.level || 'INFO'}]</span> <b>${log.event || ''}:</b> ${log.details || ''}</div>`;
+                    }).join('');
+                    terminal.scrollTop = terminal.scrollHeight;
+                }
+
+            } catch(e) {
+                console.error("[Security Telemetry Error]", e);
+            }
+        }
+
+        async function approvePendingUser(userId, chatId) {
+            playSfx('click');
+            try {
+                const res = await fetch('/api/security/approve_pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, chat_id: chatId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✅ User ${userId} APPROVED & ADMITTED to channel!`);
+                    playSfx('deal');
+                    fetchSecurityTelemetry();
+                } else {
+                    showToast(`⚠️ Approval failed: ${data.error || 'Unknown'}`);
+                }
+            } catch(e) {
+                showToast(`❌ Connection error during approval`);
+            }
+        }
+
+        async function rejectPendingUser(userId, chatId) {
+            playSfx('click');
+            try {
+                const res = await fetch('/api/security/reject_pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId, chat_id: chatId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`❌ User ${userId} DECLINED & BLOCKED from channel.`);
+                    playSfx('alert');
+                    fetchSecurityTelemetry();
+                } else {
+                    showToast(`⚠️ Rejection failed: ${data.error || 'Unknown'}`);
+                }
+            } catch(e) {
+                showToast(`❌ Connection error during decline`);
+            }
+        }
+
+        async function manualWhitelistUser() {
+            const uidInput = document.getElementById('sec-add-uid');
+            const nameInput = document.getElementById('sec-add-name');
+            const uid = uidInput ? uidInput.value.trim() : '';
+            const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Manual Whitelist';
+
+            if (!uid) {
+                showToast("⚠️ Please enter a Telegram User ID!");
+                return;
+            }
+
+            playSfx('click');
+            try {
+                const res = await fetch('/api/security/manual_whitelist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: uid, name: name })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`✅ User ${uid} whitelisted successfully!`);
+                    playSfx('reply');
+                    if (uidInput) uidInput.value = '';
+                    if (nameInput) nameInput.value = '';
+                    fetchSecurityTelemetry();
+                } else {
+                    showToast(`⚠️ Error: ${data.error}`);
+                }
+            } catch(e) {
+                showToast("❌ Whitelist request error");
+            }
+        }
+
+        async function revokeUser(userId) {
+            if (!confirm(`Are you sure you want to REVOKE channel and bot access for User ID ${userId}?`)) return;
+            playSfx('click');
+            try {
+                const res = await fetch('/api/security/revoke_member', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: userId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`🚫 Access REVOKED for User ${userId}`);
+                    playSfx('alert');
+                    fetchSecurityTelemetry();
+                } else {
+                    showToast(`⚠️ ${data.error}`);
+                }
+            } catch(e) {
+                showToast("❌ Revoke request error");
+            }
+        }
+
+        async function testTelegramSecurityAlert() {
+            playSfx('click');
+            showToast("⏳ Dispatching security alert to Commander Aman's phone...");
+            try {
+                const res = await fetch('/api/security/test_alert', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast("🔔 SECURITY ALERT DELIVERED to Aman's phone! Check Telegram (@amanDealsniperBot)");
+                    playSfx('reply');
+                    jarvisSpeak(
+                        "Security intrusion test notification delivered to your phone, Commander Aman.",
+                        "कमांडर अमन, सुरक्षा टेस्ट अलर्ट आपके फ़ोन पर भेज दिया गया है।"
+                    );
+                    fetchSecurityTelemetry();
+                } else {
+                    showToast(`⚠️ Telegram error: ${data.error}`);
+                }
+            } catch(e) {
+                showToast("❌ Alert dispatch error");
+            }
+        }
+
+        // ==========================================================
         // 📡 LIVE REAL-TIME DATA SYNC FROM FLASK BACKEND
         // ==========================================================
         async function syncLiveTelemetry() {
@@ -1769,6 +2442,9 @@
         }
         setInterval(syncLiveTelemetry, 3000);
         syncLiveTelemetry();
+
+        setInterval(fetchSecurityTelemetry, 3000);
+        fetchSecurityTelemetry();
     </script>
 </body>
 </html>
