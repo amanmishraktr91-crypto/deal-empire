@@ -47,6 +47,13 @@ bot_status_tracker = {}
 # ==========================================
 def send_telegram_alert(deal):
     """Sends ultra-clean 1-Click Loot Deal alert to Telegram"""
+    # Safety guardrail: Discard any glitch with discount > 99% or invalid price
+    disc = deal.get('discount', 0)
+    price = deal.get('price', 0)
+    mrp = deal.get('mrp', 0)
+    if disc > 99 or disc < 50 or mrp <= price or price < 20:
+        return
+
     platform_emoji = "🛒" if deal.get('store') == 'Amazon' else "⚡"
     if deal.get('store') not in ['Amazon', 'Flipkart']:
         platform_emoji = "🏬"
@@ -1217,64 +1224,83 @@ def flipkart_hunter(bot_name, category_name, search_keyword):
                     bot_status_tracker[bot_name]["scans"] += len(cards)
 
                 for card in cards:
-                    text_content = card.text
+                    # Space-separated text to prevent digit merging
+                    text_content = card.get_text(' ')
                     if any(w in text_content.lower() for w in BLOCKED_WORDS):
                         continue
 
-                    disc_match = re.search(r'(\d+)%\s*off', text_content, re.IGNORECASE)
-                    if not disc_match:
-                        continue
-                    discount = int(disc_match.group(1))
+                    # Strategy 1: Extract Price and MRP from direct DOM classes
+                    price = None
+                    mrp = None
 
-                    if discount >= MIN_DISCOUNT_PERCENT:
-                        title_elem = card.find('a', class_='wjcEIp') or card.find('div', class_='KzDlHZ') or card.find('a', title=True)
-                        title_text = title_elem.text.strip() if title_elem else (card.find('a').get('title', '') if card.find('a') else search_keyword.title())
-                        if not title_text:
-                            title_text = f"{search_keyword.title()} Loot Deal"
+                    p_el = card.find(['div', 'span'], class_=['hZ3P6w', 'Nx9bqj', '_30jeq3', 'hl05eU'])
+                    m_el = card.find(['div', 'span'], class_=['kRYCnD', 'yRaY8j', '_3I9_wc', 'cPHDOP'])
 
-                        prices = re.findall(r'₹([\d,]+)', text_content)
+                    if p_el and m_el:
+                        try:
+                            p_clean = re.sub(r'[^\d]', '', p_el.text)
+                            m_clean = re.sub(r'[^\d]', '', m_el.text)
+                            if p_clean and m_clean:
+                                price = int(p_clean)
+                                mrp = int(m_clean)
+                        except Exception:
+                            pass
+
+                    # Strategy 2: Fallback to space-separated regex matching
+                    if not price or not mrp or price >= mrp:
+                        prices = [int(x.replace(',', '')) for x in re.findall(r'₹\s*([\d,]+)', text_content)]
                         if len(prices) >= 2:
-                            try:
-                                price = int(prices[0].replace(',', ''))
-                                mrp = int(prices[1].replace(',', ''))
-                            except Exception:
-                                continue
-                        else:
+                            price, mrp = prices[0], prices[1]
+
+                    # Validate Price and MRP
+                    if not price or not mrp or mrp < MIN_MRP or price >= mrp or price <= 20:
+                        continue
+
+                    # Exact mathematical discount (must never exceed 99%)
+                    calculated_discount = int(((mrp - price) / mrp) * 100)
+                    if calculated_discount < MIN_DISCOUNT_PERCENT or calculated_discount > 99:
+                        continue
+
+                    discount = calculated_discount
+                    savings = mrp - price
+
+                    # Extract title
+                    title_elem = card.find('a', class_='wjcEIp') or card.find('div', class_='KzDlHZ') or card.find('a', title=True)
+                    title_text = title_elem.text.strip() if title_elem else (card.find('a').get('title', '') if card.find('a') else search_keyword.title())
+                    if not title_text or len(title_text) < 3:
+                        title_text = f"{search_keyword.title()} Loot Deal"
+
+                    # Extract clean product buy link
+                    link_elem = card.find('a', href=True)
+                    if not link_elem:
+                        continue
+                    raw_link = link_elem.get('href', '')
+                    clean_link = f"https://www.flipkart.com{raw_link.split('?')[0]}" if raw_link.startswith('/') else raw_link
+
+                    with seen_lock:
+                        if clean_link in seen_products:
                             continue
+                        seen_products.add(clean_link)
 
-                        if mrp < MIN_MRP or price >= mrp or price <= 20:
-                            continue
+                    deal = {
+                        "store": "Flipkart",
+                        "bot": bot_name,
+                        "category": category_name,
+                        "title": title_text,
+                        "price": price,
+                        "mrp": mrp,
+                        "savings": savings,
+                        "discount": discount,
+                        "link": clean_link
+                    }
 
-                        link_elem = card.find('a', href=True)
-                        if not link_elem:
-                            continue
-                        raw_link = link_elem.get('href', '')
-                        clean_link = f"https://www.flipkart.com{raw_link.split('?')[0]}" if raw_link.startswith('/') else raw_link
+                    with stats_lock:
+                        total_loots_found += 1
+                        bot_status_tracker[bot_name]["loots"] += 1
+                        live_deals_feed.insert(0, deal)
 
-                        with seen_lock:
-                            if clean_link in seen_products:
-                                continue
-                            seen_products.add(clean_link)
-
-                        deal = {
-                            "store": "Flipkart",
-                            "bot": bot_name,
-                            "category": category_name,
-                            "title": title_text,
-                            "price": price,
-                            "mrp": mrp,
-                            "savings": mrp - price,
-                            "discount": discount,
-                            "link": clean_link
-                        }
-
-                        with stats_lock:
-                            total_loots_found += 1
-                            bot_status_tracker[bot_name]["loots"] += 1
-                            live_deals_feed.insert(0, deal)
-
-                        print(f"\n⚡ [FLIPKART LOOT {discount}% OFF]: {title_text[:40]}... Rs.{price} (MRP: Rs.{mrp})")
-                        send_telegram_alert(deal)
+                    print(f"\n⚡ [FLIPKART LOOT {discount}% OFF]: {title_text[:40]}... Rs.{price} (MRP: Rs.{mrp})")
+                    send_telegram_alert(deal)
 
         except Exception as e:
             pass
