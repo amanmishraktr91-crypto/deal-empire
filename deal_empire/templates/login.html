@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>JARVIS // ACCESS</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  body { background:#050b14; margin:0; display:flex; align-items:center; justify-content:center; min-height:100vh;
+         font-family:'Share Tech Mono',monospace; color:#00f0ff;
+         background-image: radial-gradient(circle at 50% 50%, rgba(0,240,255,0.08) 0%, transparent 60%); }
+  .box { background:rgba(10,25,47,0.9); border:2px solid #00f0ff; border-radius:14px; padding:44px 36px;
+         box-shadow:0 0 50px rgba(0,240,255,0.35); width:340px; }
+  h1 { font-family:'Orbitron'; text-align:center; letter-spacing:4px; font-size:18px; margin:0 0 8px; }
+  .sub { text-align:center; font-size:11px; color:#8892b0; margin-bottom:26px; }
+  input { width:100%; padding:14px; background:#0a192f; border:1px solid #00f0ff; border-radius:8px;
+          color:#00f0ff; font-family:'Share Tech Mono'; font-size:15px; box-sizing:border-box; margin-bottom:18px; }
+  input:focus { outline:none; box-shadow:0 0 18px rgba(0,240,255,0.6); }
+  button { width:100%; padding:14px; background:transparent; border:2px solid #00f0ff; color:#00f0ff;
+           font-family:'Orbitron'; font-weight:900; letter-spacing:3px; border-radius:8px; cursor:pointer; transition:.2s; }
+  button:hover { background:#00f0ff; color:#050b14; box-shadow:0 0 25px #00f0ff; }
+  #err { color:#ff0055; text-align:center; margin-top:14px; font-size:13px; min-height:18px; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>🔒 JARVIS ACCESS</h1>
+  <div class="sub">COMMAND CENTER MEIN PRAVESH KAREIN</div>
+  <input type="password" id="pwd" placeholder="Access Code Daalein" autofocus>
+  <button onclick="doLogin()">AUTHENTICATE</button>
+  <div id="err"></div>
+</div>
+<script>
+async function doLogin() {
+  const pwd = document.getElementById('pwd').value;
+  const res = await fetch('/api/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({password: pwd})
+  });
+  if (res.ok) location.reload();
+  else document.getElementById('err').innerText = '❌ GALAT CODE — ACCESS DENIED';
+}
+document.getElementById('pwd').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>

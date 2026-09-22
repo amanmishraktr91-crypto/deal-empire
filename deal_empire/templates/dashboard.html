@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS COMMAND CENTER</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#050b14; --panel:rgba(10,25,47,0.85);
+  --cyan:#00f0ff; --amber:#ffb703; --emerald:#00ff88;
+  --crimson:#ff0055; --muted:#8892b0;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#e0f7fa;font-family:'Rajdhani',sans-serif;
+     background-image:radial-gradient(circle at 20% 50%,rgba(0,240,255,0.05) 0%,transparent 50%),
+                      radial-gradient(circle at 80% 20%,rgba(124,58,237,0.05) 0%,transparent 50%);
+     min-height:100vh}
+
+.header{border-bottom:2px solid var(--cyan);box-shadow:0 0 22px rgba(0,240,255,0.35);
+        display:flex;justify-content:space-between;align-items:center;padding:14px 24px;
+        background:rgba(5,11,20,0.95);position:sticky;top:0;z-index:50;flex-wrap:wrap;gap:10px}
+.brand{display:flex;align-items:center;gap:12px}
+.dot{width:13px;height:13px;border-radius:50%;background:var(--emerald);box-shadow:0 0 14px var(--emerald);animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.4;transform:scale(1.25)}}
+.brand-text{font-family:'Orbitron';font-size:15px;font-weight:900;letter-spacing:2px;color:var(--cyan)}
+.status{font-family:'Share Tech Mono';font-size:12.5px;color:var(--cyan);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.status .up{color:var(--amber)}
+.logout{color:var(--crimson);text-decoration:none;font-weight:700}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;padding:18px 24px}
+.kpi{background:var(--panel);border:1px solid var(--cyan);border-radius:10px;padding:16px;
+     box-shadow:inset 0 0 18px rgba(0,240,255,0.1);transition:.3s}
+.kpi:hover{box-shadow:inset 0 0 28px rgba(0,240,255,0.2),0 0 20px rgba(0,240,255,0.15)}
+.kpi .lbl{color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase}
+.kpi .num{font-family:'Orbitron';font-size:26px;font-weight:900;color:var(--cyan);margin-top:6px}
+
+.sect{padding:8px 24px;font-family:'Orbitron';font-size:13.5px;color:var(--cyan);letter-spacing:2px;
+      display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.sect .actions{display:flex;gap:8px}
+.sect .actions button{background:transparent;border:1px solid var(--amber);color:var(--amber);
+                      padding:6px 12px;border-radius:6px;font-family:'Orbitron';font-size:10px;
+                      font-weight:700;letter-spacing:1px;cursor:pointer;transition:.2s}
+.sect .actions button:hover{background:var(--amber);color:#050b14;box-shadow:0 0 15px var(--amber)}
+
+.fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;padding:0 24px 20px}
+.bot{background:rgba(15,32,67,0.9);border-left:4px solid var(--emerald);padding:12px 14px;
+     border-radius:8px;transition:.3s;position:relative;overflow:hidden}
+.bot::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+             background:linear-gradient(90deg,transparent,var(--emerald),transparent);opacity:.5}
+.bot.active{border-left-color:var(--cyan)}
+.bot.active::before{background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:1;animation:scan 2.5s infinite}
+.bot.healing{border-left-color:var(--amber);animation:pulseB 1s infinite}
+.bot.error{border-left-color:var(--crimson)}
+.bot.idle{border-left-color:#556}
+@keyframes scan{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+@keyframes pulseB{50%{box-shadow:0 0 18px rgba(255,183,3,0.4)}}
+.bot-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.bot-name{font-family:'Orbitron';font-size:13px;font-weight:700}
+.bot-store{font-size:11px;color:var(--muted);margin-top:2px}
+.bot-status{font-family:'Share Tech Mono';font-size:10.5px;padding:3px 8px;border-radius:10px;text-transform:uppercase}
+.st-active{background:rgba(0,240,255,0.15);color:var(--cyan)}
+.st-idle{background:rgba(136,146,176,0.15);color:var(--muted)}
+.st-healing{background:rgba(255,183,3,0.2);color:var(--amber)}
+.st-error{background:rgba(255,0,85,0.2);color:var(--crimson)}
+.bot-mid{display:flex;justify-content:space-between;font-family:'Share Tech Mono';font-size:11.5px;color:var(--muted);margin-bottom:8px}
+.bot-mid .s{color:var(--cyan)} .bot-mid .l{color:var(--emerald)}
+.bot-bottom{display:flex;justify-content:space-between;align-items:center;gap:6px}
+.heart{font-family:'Share Tech Mono';font-size:10.5px;color:var(--muted)}
+.heart.warn{color:var(--amber)}
+.heart.bad{color:var(--crimson)}
+.fix-btn{background:transparent;border:1px solid var(--amber);color:var(--amber);
+         padding:5px 10px;border-radius:6px;font-family:'Orbitron';font-size:9.5px;font-weight:700;
+         letter-spacing:1px;cursor:pointer;transition:.2s}
+.fix-btn:hover{background:var(--amber);color:#050b14;box-shadow:0 0 12px var(--amber)}
+.fix-btn:disabled{opacity:.5;cursor:wait}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 24px 24px}
+.panel{background:var(--panel);border:1px solid rgba(0,240,255,0.3);border-radius:10px;padding:16px 18px}
+.panel-title{font-family:'Orbitron';font-size:12.5px;color:var(--cyan);letter-spacing:2px;
+             border-bottom:1px solid rgba(0,240,255,0.2);padding-bottom:8px;margin-bottom:12px}
+
+.feed{padding:9px 11px;border-left:3px solid var(--emerald);background:rgba(0,255,136,0.05);
+      border-radius:4px;margin-bottom:7px;font-size:12.5px;animation:slide .3s}
+@keyframes slide{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.feed .t{color:#e0f7fa;font-weight:600}
+.feed .m{color:var(--muted);font-size:11.5px;margin-top:3px}
+.feed .d{color:var(--emerald);font-weight:700} .feed .p{color:var(--amber);font-weight:700}
+
+.sec{background:rgba(255,183,3,0.08);border-left:3px solid var(--amber);border-radius:6px;
+     padding:11px 13px;margin-bottom:8px;display:flex;justify-content:space-between;
+     align-items:center;gap:10px;flex-wrap:wrap}
+.sec .info .n{font-weight:700;font-size:13px}
+.sec .info .meta{font-size:11px;color:var(--muted);font-family:'Share Tech Mono'}
+.btns{display:flex;gap:6px}
+.btn{padding:7px 13px;border:none;border-radius:6px;font-family:'Orbitron';font-size:10px;
+     font-weight:700;letter-spacing:1px;cursor:pointer;transition:.2s}
+.btn-a{background:var(--emerald);color:#050b14}
+.btn-a:hover{box-shadow:0 0 14px var(--emerald);transform:translateY(-1px)}
+.btn-r{background:var(--crimson);color:#fff}
+.btn-r:hover{box-shadow:0 0 14px var(--crimson);transform:translateY(-1px)}
+.btn:disabled{opacity:.5;cursor:wait}
+.empty{text-align:center;color:var(--muted);padding:16px;font-style:italic;font-size:12px}
+
+.heal-log{font-size:11px;color:var(--muted);font-family:'Share Tech Mono';padding:3px 0}
+
+/* Chat widget */
+#chatWrap{position:fixed;bottom:18px;right:18px;width:370px;max-width:calc(100vw - 30px);
+          background:rgba(10,25,47,0.98);border:2px solid var(--cyan);border-radius:14px;
+          box-shadow:0 0 40px rgba(0,240,255,0.4);z-index:200;display:flex;flex-direction:column;
+          overflow:hidden;transition:.3s}
+#chatWrap.min{height:52px}
+#chatHead{background:linear-gradient(135deg,#00f0ff22,#7c3aed22);padding:12px 16px;
+          display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+          border-bottom:1px solid rgba(0,240,255,0.3)}
+#chatHead h3{margin:0;font-family:'Orbitron';font-size:12.5px;color:var(--cyan);letter-spacing:2px}
+#chatHead .acts span{cursor:pointer;color:var(--cyan);font-size:16px;font-weight:700;margin-left:10px}
+#chatBody{height:400px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#050b14}
+#chatBody::-webkit-scrollbar{width:6px}
+#chatBody::-webkit-scrollbar-thumb{background:var(--cyan);border-radius:3px}
+.msg{max-width:88%;padding:9px 13px;border-radius:12px;font-size:13.5px;line-height:1.4;
+     white-space:pre-wrap;word-wrap:break-word;animation:fade .25s}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.msg.u{align-self:flex-end;background:linear-gradient(135deg,#00f0ff,#0891b2);color:#050b14;border-bottom-right-radius:4px}
+.msg.a{align-self:flex-start;background:rgba(15,32,67,0.95);border:1px solid rgba(0,240,255,0.25);color:#e0f7fa;border-bottom-left-radius:4px}
+.msg.typing{align-self:flex-start;background:rgba(15,32,67,0.95);color:var(--cyan);font-style:italic;font-size:12px}
+#chatInput{display:flex;border-top:1px solid rgba(0,240,255,0.3);padding:8px;gap:6px;background:#050b14}
+#chatInput input{flex:1;background:#0a192f;border:1px solid rgba(0,240,255,0.3);border-radius:8px;
+                 padding:10px 12px;color:#e0f7fa;font-family:'Rajdhani';font-size:14px;outline:none}
+#chatInput input:focus{border-color:var(--cyan);box-shadow:0 0 12px rgba(0,240,255,0.3)}
+#chatInput button{background:var(--cyan);color:#050b14;border:none;border-radius:8px;
+                  padding:0 16px;font-family:'Orbitron';font-weight:900;font-size:11px;letter-spacing:1px;cursor:pointer}
+#chatInput button:disabled{opacity:.5}
+
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+@media(max-width:640px){
+  .header,.kpis,.fleet,.grid2,.sect{padding-left:14px;padding-right:14px}
+  .brand-text{font-size:11px}
+  #chatWrap{width:calc(100vw - 24px);right:12px;bottom:12px}
+  #chatBody{height:320px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="brand">
+    <div class="dot"></div>
+    <div class="brand-text">JARVIS // 21-BOT MISSION CONTROL</div>
+  </div>
+  <div class="status">
+    <span>DOCTOR: <b id="doctorBadge" style="color:var(--emerald)">INIT</b></span>
+    <span class="up">UPTIME: <b id="uptime">00:00:00</b></span>
+    <a href="#" class="logout" onclick="logout();return false;">LOGOUT</a>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="lbl">Total Products Scan Kiye</div><div class="num" id="kScans">0</div></div>
+  <div class="kpi"><div class="lbl">Loot Deals Mile</div><div class="num" id="kLoots" style="color:var(--emerald)">0</div></div>
+  <div class="kpi"><div class="lbl">Active Hunter Bots</div><div class="num" id="kBots">0 / 21</div></div>
+  <div class="kpi"><div class="lbl">Iron Dome Security</div><div class="num" style="color:var(--cyan)">ACTIVE</div></div>
+</div>
+
+<div class="sect">
+  <span>⚡ 21 HUNTER BOTS KA LIVE STATUS</span>
+  <div class="actions">
+    <button onclick="healAll()">🛠️ SAB BOTS FIX KARO</button>
+  </div>
+</div>
+<div class="fleet" id="fleet"></div>
+
+<div class="grid2">
+  <div class="panel">
+    <div class="panel-title">🔥 LIVE LOOT FEED (Naye Deals)</div>
+    <div id="lootFeed"><div class="empty">Loot ka wait kar rahe hain...</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">🛡️ SECURITY GATEKEEPER (Join Requests)</div>
+    <div id="secFeed"><div class="empty">Koi pending request nahi hai.</div></div>
+  </div>
+</div>
+
+<div class="grid2" style="grid-template-columns:1fr;">
+  <div class="panel">
+    <div class="panel-title">🔧 AUTO-HEALING LOG (Kaun sa bot kab theek hua)</div>
+    <div id="healFeed"><div class="empty">Abhi tak koi bot fix nahi hua.</div></div>
+  </div>
+</div>
+
+<!-- Chat -->
+<div id="chatWrap">
+  <div id="chatHead" onclick="toggleChat()">
+    <h3>🤖 JARVIS AI SE BAAT KAREIN</h3>
+    <div class="acts"><span onclick="event.stopPropagation();clearChat()" title="Clear">↻</span></div>
+  </div>
+  <div id="chatBody">
+    <div class="msg a">Namaste! Main JARVIS hoon. Bots, loots, ya kisi bhi cheez ke baare mein pucho. 🤖</div>
+  </div>
+  <div id="chatInput">
+    <input id="chatMsg" placeholder="Kuch bhi pucho..." autocomplete="off">
+    <button id="sendBtn" onclick="sendChat()">BHEJO</button>
+  </div>
+</div>
+
+<script>
+const API_KEY = "{{ api_key }}";
+let audioCtx = null, lastScans = 0, lastLoots = 0, chatHistory = [], chatMin = false;
+
+function ensureAudio(){ if(!audioCtx) audioCtx=new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); }
+function beep(f=880,t='sine',d=.15,v=.08){ try{ ensureAudio(); const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.type=t; o.frequency.setValueAtTime(f,audioCtx.currentTime); g.gain.setValueAtTime(v,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d);}catch(e){} }
+function fmtUp(s){ const h=String(Math.floor(s/3600)).padStart(2,'0'); const m=String(Math.floor(s%3600/60)).padStart(2,'0'); const x=String(s%60).padStart(2,'0'); return h+':'+m+':'+x; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function statusLabel(s){
+  return {active:'CHAL RAHA', idle:'IDLE', healing:'THEEK HO RAHA', error:'ERROR', dead:'BAND'}[s] || s.toUpperCase();
+}
+
+function renderBots(bots){
+  const c = document.getElementById('fleet');
+  let active = 0, html = '';
+  for (const [name, info] of Object.entries(bots)){
+    if(info.status==='active') active++;
+    const sc = info.store==='Amazon' ? '#ff9900' : '#2874f0';
+    const cls = ['healing','error','active','idle'].includes(info.status) ? info.status : '';
+    const gap = info.heartbeat_gap || 0;
+    const hCls = gap > 60 ? 'bad' : gap > 30 ? 'warn' : '';
+    html += `<div class="bot ${cls}">
+      <div class="bot-top">
+        <div>
+          <div class="bot-name">${esc(name)}</div>
+          <div class="bot-store">Store: <span style="color:${sc};font-weight:700">${esc(info.store)}</span></div>
+        </div>
+        <div class="bot-status st-${info.status}">${statusLabel(info.status)}</div>
+      </div>
+      <div class="bot-mid">
+        <span>⚡ Scans: <b class="s">${info.scans||0}</b></span>
+        <span>🔥 Loots: <b class="l">${info.loots||0}</b></span>
+      </div>
+      <div class="bot-bottom">
+        <div class="heart ${hCls}">💓 ${gap}s pehle</div>
+        <button class="fix-btn" onclick="fixBot('${esc(name)}', this)">🛠️ FIX</button>
+      </div>
+    </div>`;
+  }
+  c.innerHTML = html;
+  document.getElementById('kBots').innerText = active + ' / ' + Object.keys(bots).length;
+}
+
+function renderLoots(loots){
+  const f = document.getElementById('lootFeed');
+  if(!loots.length){ f.innerHTML='<div class="empty">Loot ka wait kar rahe hain...</div>'; return; }
+  f.innerHTML = loots.slice(0,8).map(l=>`
+    <div class="feed">
+      <div class="t">🛒 ${esc(l.title)}</div>
+      <div class="m"><span class="p">${esc(l.price)}</span> → <span class="d">${esc(l.discount)} OFF</span> • MRP: ${esc(l.mrp)} • ${esc(l.bot)}</div>
+    </div>`).join('');
+}
+
+function renderSecurity(pending, logs){
+  const f = document.getElementById('secFeed');
+  let html = '';
+  if(pending && pending.length){
+    for(const r of pending){
+      html += `<div class="sec">
+        <div class="info">
+          <div class="n">👤 ${esc(r.name||'Unknown')}</div>
+          <div class="meta">@${esc(r.username||'no_username')} • ID: ${r.user_id}</div>
+          <div class="meta">📢 ${esc(r.channel||'N/A')}</div>
+        </div>
+        <div class="btns">
+          <button class="btn btn-a" onclick="approve(${r.user_id},this)">✅ ALLOW</button>
+          <button class="btn btn-r" onclick="reject(${r.user_id},this)">❌ BLOCK</button>
+        </div>
+      </div>`;
+    }
+  } else {
+    html = '<div class="empty">Koi pending request nahi hai.</div>';
+  }
+  if(logs && logs.length){
+    html += '<div style="margin-top:10px;font-size:10.5px;color:#8892b0;font-family:Share Tech Mono">RECENT:</div>';
+    for(const l of logs.slice(0,5)){
+      html += `<div style="font-size:10.5px;color:#8892b0;font-family:Share Tech Mono;padding:2px 0">${l.action==='approved'?'✅':'❌'} ${l.action} → ID ${l.user_id}</div>`;
+    }
+  }
+  f.innerHTML = html;
+}
+
+function renderHeals(heals){
+  const f = document.getElementById('healFeed');
+  if(!heals || !heals.length){ f.innerHTML='<div class="empty">Abhi tak koi bot fix nahi hua.</div>'; return; }
+  f.innerHTML = heals.slice(0,8).map(h=>`
+    <div class="heal-log">🔧 <b style="color:var(--amber)">${esc(h.bot)}</b> — ${esc(h.reason)} <span style="color:#556">(${new Date(h.time).toLocaleTimeString()})</span></div>
+  `).join('');
+}
+
+function updateKpis(d){
+  document.getElementById('kScans').innerText = (d.total_scans||0).toLocaleString();
+  document.getElementById('kLoots').innerText = (d.loots_found||0).toLocaleString();
+  if(d.uptime_seconds!=null) document.getElementById('uptime').innerText = fmtUp(d.uptime_seconds);
+  if(d.doctor){
+    const dd = d.doctor, b = document.getElementById('doctorBadge');
+    if(dd.healthy_bots === dd.total_monitored_bots){
+      b.innerText = `HEALTHY (${dd.healthy_bots}/${dd.total_monitored_bots})`;
+      b.style.color = 'var(--emerald)';
+    } else {
+      b.innerText = `HEALING (${dd.healing_actions_total} fix)`;
+      b.style.color = 'var(--amber)';
+    }
+  }
+  if(d.loots_found > lastLoots && lastLoots>0) beep(1250,'triangle',0.18);
+  lastScans = d.total_scans||0; lastLoots = d.loots_found||0;
+}
+
+async function approve(uid, btn){
+  btn.disabled = true; beep(1250,'triangle',0.18);
+  try{
+    const r = await fetch('/api/security/approve',{
+      method:'POST', headers:{'Content-Type':'application/json','X-Admin-Key':API_KEY},
+      body: JSON.stringify({user_id: uid})
+    });
+    if(!r.ok){ const e = await r.json().catch(()=>({})); alert('❌ '+(e.error||r.status)); }
+  }catch(e){ alert('❌ '+e.message); }
+  btn.disabled = false;
+}
+async function reject(uid, btn){
+  btn.disabled = true; beep(400,'sawtooth',0.28);
+  try{
+    const r = await fetch('/api/security/reject',{
+      method:'POST', headers:{'Content-Type':'application/json','X-Admin-Key':API_KEY},
+      body: JSON.stringify({user_id: uid})
+    });
+    if(!r.ok){ const e = await r.json().catch(()=>({})); alert('❌ '+(e.error||r.status)); }
+  }catch(e){ alert('❌ '+e.message); }
+  btn.disabled = false;
+}
+async function fixBot(name, btn){
+  if(btn) btn.disabled = true;
+  beep(900,'triangle',0.2);
+  try{
+    const r = await fetch('/api/bot/heal',{
+      method:'POST', headers:{'Content-Type':'application/json','X-Admin-Key':API_KEY},
+      body: JSON.stringify({bot_name: name})
+    });
+    const d = await r.json();
+    if(!d.ok) alert('⚠️ Fix nahi ho paya');
+  }catch(e){ alert('❌ '+e.message); }
+  if(btn) btn.disabled = false;
+}
+async function healAll(){
+  beep(1400,'triangle',0.25);
+  try{
+    const r = await fetch('/api/doctor/heal_all',{
+      method:'POST', headers:{'Content-Type':'application/json','X-Admin-Key':API_KEY}
+    });
+    const d = await r.json();
+    alert(`🛠️ ${d.healed?.length || 0} bots fix kiye gaye.`);
+  }catch(e){ alert('❌ '+e.message); }
+}
+async function logout(){ await fetch('/api/logout',{method:'POST'}); location.reload(); }
+
+// SSE Stream
+function startStream(){
+  const es = new EventSource('/api/stream');
+  es.onmessage = ev=>{
+    try{
+      const d = JSON.parse(ev.data);
+      updateKpis(d);
+      if(d.bot_status) renderBots(d.bot_status);
+      if(d.recent_loots) renderLoots(d.recent_loots);
+      renderSecurity(d.security_pending, d.security_logs);
+      renderHeals(d.heal_logs);
+    }catch(e){ console.error(e); }
+  };
+  es.onerror = ()=>{ es.close(); setTimeout(startStream, 3000); };
+}
+
+// Chat
+function toggleChat(){ chatMin = !chatMin; document.getElementById('chatWrap').classList.toggle('min', chatMin); }
+function clearChat(){ chatHistory=[]; document.getElementById('chatBody').innerHTML = '<div class="msg a">Chat clear ho gaya. Naya sawal pucho. 🤖</div>'; }
+
+function appendMsg(role, text){
+  const b = document.getElementById('chatBody');
+  const d = document.createElement('div');
+  d.className = 'msg ' + (role==='user'?'u':'a');
+  d.textContent = text;
+  b.appendChild(d);
+  b.scrollTop = b.scrollHeight;
+  return d;
+}
+
+async function sendChat(){
+  const inp = document.getElementById('chatMsg');
+  const msg = inp.value.trim();
+  if(!msg) return;
+  inp.value = '';
+  appendMsg('user', msg);
+  chatHistory.push({role:'user', content: msg});
+
+  const typing = document.createElement('div');
+  typing.className = 'msg typing'; typing.textContent = 'JARVIS soch raha hai...';
+  document.getElementById('chatBody').appendChild(typing);
+  document.getElementById('chatBody').scrollTop = 99999;
+  document.getElementById('sendBtn').disabled = true;
+
+  try{
+    const r = await fetch('/api/chat',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, history: chatHistory.slice(0,-1)})
+    });
+    const d = await r.json();
+    typing.remove();
+    const reply = d.reply || '⚠️ Koi jawab nahi mila';
+    appendMsg('assistant', reply);
+    chatHistory.push({role:'assistant', content: reply});
+  }catch(e){
+    typing.remove();
+    appendMsg('assistant', '⚠️ Network error: '+e.message);
+  }
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('chatMsg').focus();
+}
+
+document.getElementById('chatMsg').addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
+
+startStream();
+</script>
+</body>
+</html>

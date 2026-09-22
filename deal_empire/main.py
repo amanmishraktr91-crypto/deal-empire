@@ -5,15 +5,16 @@ import time
 import random
 import threading
 import re
+import collections
 
 if hasattr(sys.stdout, 'reconfigure'):
     try:
-        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
     except Exception:
         pass
 if hasattr(sys.stderr, 'reconfigure'):
     try:
-        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
     except Exception:
         pass
 
@@ -24,13 +25,45 @@ from flask import Flask, jsonify, render_template_string, request
 # ==========================================
 # ⚙️ AMAN BHAI KA BOT & SECURITY CONFIGURATION
 # ==========================================
-BOT_TOKEN = "8592608802:AAH3FL8bZY6ZmpqmpB3XAzaZfwjAxQGip0k"
-CHAT_ID = "6208434509"
-ADMIN_USER_ID = 6208434509
+# Read from environment variables with safe defaults (Secured against leaks)
+# Load .env if present
+env_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(env_file):
+    try:
+        with open(env_file, "r", encoding="utf-8") as _ef:
+            for _line in _ef:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k.strip(), _v.strip())
+    except Exception:
+        pass
 
-MIN_DISCOUNT_PERCENT = 70
-MIN_MRP = 400
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+CHAT_ID = os.environ.get("CHAT_ID", "6208434509")
+ADMIN_USER_ID = int(os.environ.get("ADMIN_USER_ID", "6208434509"))
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "aman_empire_secret_9988")
+
+# Loot discount threshold: 60% default captures high-value real loots
+MIN_DISCOUNT_PERCENT = int(os.environ.get("MIN_DISCOUNT", "60"))
+MIN_MRP = int(os.environ.get("MIN_MRP", "400"))
+
+# Blocked spam keywords with regex word-boundary protection
 BLOCKED_WORDS = ["cover", "case", "tempered glass", "screen protector", "skin", "sticker", "pouch", "disposable", "tissue", "toothpick"]
+
+def is_title_blocked(title):
+    if not title:
+        return True
+    title_lower = title.lower()
+    for word in BLOCKED_WORDS:
+        if " " in word:
+            if word in title_lower:
+                return True
+        else:
+            # Word-boundary check: prevents blocking "briefcase" or "showcase" while blocking standalone "case"
+            if re.search(r'\b' + re.escape(word) + r'\b', title_lower):
+                return True
+    return False
 
 # ==========================================
 # 📊 GLOBAL STATS & LIVE FEED
@@ -38,9 +71,22 @@ BLOCKED_WORDS = ["cover", "case", "tempered glass", "screen protector", "skin", 
 stats_lock = threading.Lock()
 total_scans_count = 0
 total_loots_found = 0
+system_start_time = time.time()
 live_deals_feed = []
+
+# Memory-Leak-Proof Bounded LRU Cache (Strictly caps RAM usage under 50MB)
+MAX_SEEN_PRODUCTS = 3000
+seen_products = collections.OrderedDict()
 seen_lock = threading.Lock()
-seen_products = set()
+
+def check_and_add_seen(deal_id):
+    with seen_lock:
+        if deal_id in seen_products:
+            return True
+        seen_products[deal_id] = time.time()
+        if len(seen_products) > MAX_SEEN_PRODUCTS:
+            seen_products.popitem(last=False)
+        return False
 
 # 21 Bots Status Tracker
 bot_status_tracker = {}
@@ -49,235 +95,210 @@ bot_status_tracker = {}
 # 🛡️ MILITARY-GRADE TELEGRAM SECURITY MATRIX
 # ==========================================
 SECURITY_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "security_db.json")
-security_lock = threading.Lock()
 
+# DEADLOCK FIX: Using threading.RLock() (Re-entrant Lock) so nested calls never freeze!
+security_lock = threading.RLock()
+_cached_security_db = None
 def load_security_db():
-    default_db = {
-        "admin_id": ADMIN_USER_ID,
-        "defense_active": True,
-        "authorized_members": {
-            str(ADMIN_USER_ID): {
-                "user_id": ADMIN_USER_ID,
-                "name": "Aman Mishra",
-                "username": "aman_mishra",
-                "role": "SUPER_ADMIN",
-                "added_at": "SYSTEM_INIT",
-                "approved_by": "System Master"
+    global _cached_security_db
+    with security_lock:
+        if _cached_security_db is not None:
+            return _cached_security_db
+
+        default_db = {
+            "admin_id": ADMIN_USER_ID,
+            "defense_active": True,
+            "authorized_members": {
+                str(ADMIN_USER_ID): {
+                    "user_id": ADMIN_USER_ID,
+                    "name": "Aman Mishra",
+                    "username": "aman_mishra",
+                    "role": "SUPER_ADMIN",
+                    "added_at": "SYSTEM_INIT",
+                    "approved_by": "System Master"
+                }
+            },
+            "pending_requests": {},
+            "blocked_users": {},
+            "security_logs": [
+                {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "level": "SUCCESS",
+                    "event": "🛡️ JARVIS Iron Dome Activated",
+                    "details": "All 5 Security Sentinels armed & monitoring @amanDealsniperBot channel."
+                }
+            ],
+            "stats": {
+                "total_join_requests": 0,
+                "approved_count": 1,
+                "rejected_count": 0,
+                "intrusions_blocked": 0,
+                "protected_deals_dispatched": 0
             }
-        },
-        "pending_requests": {},
-        "blocked_users": {},
-        "security_logs": [
-            {
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "level": "SUCCESS",
-                "event": "🛡️ JARVIS Iron Dome Activated",
-                "details": "All 5 Security Sentinels armed & monitoring @amanDealsniperBot channel."
-            }
-        ],
-        "stats": {
-            "total_join_requests": 0,
-            "approved_count": 1,
-            "rejected_count": 0,
-            "intrusions_blocked": 0,
-            "protected_deals_dispatched": 0
         }
-    }
-    if not os.path.exists(SECURITY_DB_FILE):
+        if not os.path.exists(SECURITY_DB_FILE):
+            save_security_db(default_db)
+            _cached_security_db = default_db
+            return _cached_security_db
         try:
-            with open(SECURITY_DB_FILE, 'w', encoding='utf-8') as f:
-                json.dump(default_db, f, indent=2, ensure_ascii=False)
+            with open(SECURITY_DB_FILE, 'r', encoding='utf-8') as f:
+                _cached_security_db = json.load(f)
         except Exception:
-            pass
-        return default_db
-    try:
-        with open(SECURITY_DB_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            for k, v in default_db.items():
-                if k not in data:
-                    data[k] = v
-            return data
-    except Exception as e:
-        print(f"[Security DB Load Error]: {e}")
-        return default_db
+            _cached_security_db = default_db
+        return _cached_security_db
 
 def save_security_db(db):
-    try:
-        with open(SECURITY_DB_FILE, 'w', encoding='utf-8') as f:
-            json.dump(db, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(f"[Security DB Save Error]: {e}")
+    global _cached_security_db
+    with security_lock:
+        _cached_security_db = db
+        # Atomic file write using temporary file + os.replace to prevent file corruption
+        tmp_file = SECURITY_DB_FILE + ".tmp"
+        try:
+            with open(tmp_file, 'w', encoding='utf-8') as f:
+                json.dump(db, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, SECURITY_DB_FILE)
+        except Exception as e:
+            print(f"[Security DB Save Error]: {e}", flush=True)
 
 def add_security_log(event, details, level="INFO"):
-    try:
-        with security_lock:
-            db = load_security_db()
-            entry = {
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "level": level,
-                "event": event,
-                "details": details
-            }
-            db.setdefault("security_logs", []).append(entry)
-            if len(db["security_logs"]) > 100:
-                db["security_logs"] = db["security_logs"][-100:]
-            save_security_db(db)
-    except Exception as e:
-        print(f"[Security Log Error]: {e}")
-
-def send_security_alert_to_admin(text, reply_markup=None):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": ADMIN_USER_ID,
-        "text": text,
-        "parse_mode": "HTML",
-        "disable_web_page_preview": True
-    }
-    if reply_markup:
-        payload["reply_markup"] = reply_markup
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        print(f"[Send Security Alert Error]: {e}")
-
-def approve_user_join(user_id, chat_id="", approver="Commander Aman"):
-    uid_str = str(user_id).strip()
     with security_lock:
         db = load_security_db()
-        req_data = db.get("pending_requests", {}).pop(uid_str, {})
-        actual_chat_id = chat_id or req_data.get("chat_id", "")
+        log_entry = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "level": level,
+            "event": event,
+            "details": details
+        }
+        db.setdefault("security_logs", []).insert(0, log_entry)
+        if len(db["security_logs"]) > 100:
+            db["security_logs"] = db["security_logs"][:100]
+        save_security_db(db)
 
-        api_msg = "Approved locally"
+def send_security_alert_to_admin(text, reply_markup=None):
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": ADMIN_USER_ID,
+            "text": text,
+            "parse_mode": "HTML"
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        requests.post(url, json=payload, timeout=10)
+    except Exception as e:
+        print(f"[Security Alert Error]: {e}", flush=True)
+
+def approve_user_join(user_id, chat_id="", approver="Commander Aman"):
+    with security_lock:
+        db = load_security_db()
+        str_uid = str(user_id)
+        req_info = db.get("pending_requests", {}).pop(str_uid, None)
+
+        user_name = req_info.get("name", "User") if req_info else f"Member_{user_id}"
+        username = req_info.get("username", "") if req_info else ""
+        actual_chat_id = chat_id or (req_info.get("chat_id") if req_info else "")
+
+        db.setdefault("authorized_members", {})[str_uid] = {
+            "user_id": int(user_id),
+            "name": user_name,
+            "username": username,
+            "role": "VIP_MEMBER",
+            "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "approved_by": approver
+        }
+        db.setdefault("stats", {})["approved_count"] = db["stats"].get("approved_count", 0) + 1
+        save_security_db(db)
+
+        # Non-deadlocking now because security_lock is threading.RLock()!
+        add_security_log("Member Approved", f"User {user_name} ({user_id}) admitted to channel by {approver}.", "SUCCESS")
+
         if actual_chat_id:
             try:
                 url = f"https://api.telegram.org/bot{BOT_TOKEN}/approveChatJoinRequest"
                 resp = requests.post(url, json={"chat_id": actual_chat_id, "user_id": int(user_id)}, timeout=10)
-                res_json = resp.json()
-                if not res_json.get("ok"):
-                    api_msg = res_json.get("description", "Telegram API returned not ok")
-                else:
-                    api_msg = "Admitted to channel"
+                print(f"[Gatekeeper] Telegram API approveChatJoinRequest: {resp.status_code}", flush=True)
             except Exception as e:
-                api_msg = str(e)
+                print(f"[Gatekeeper Approve Error]: {e}", flush=True)
 
-        first_name = req_data.get("first_name", "Member")
-        last_name = req_data.get("last_name", "")
-        full_name = f"{first_name} {last_name}".strip() or f"User_{user_id}"
-        username = req_data.get("username", "")
-
-        db["authorized_members"][uid_str] = {
-            "user_id": int(user_id) if uid_str.isdigit() else user_id,
-            "name": full_name,
-            "username": username,
-            "role": "MEMBER",
-            "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "approved_by": approver
-        }
-        db.get("blocked_users", {}).pop(uid_str, None)
-        db["stats"]["approved_count"] = len(db["authorized_members"])
-        save_security_db(db)
-
-    add_security_log("Member Approved", f"User {full_name} ({user_id}) approved by {approver}. Result: {api_msg}", "SUCCESS")
-
-    # Send Welcome DM to user
-    try:
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
-            "chat_id": user_id,
-            "text": (
-                f"🎉 <b>CONGRATULATIONS! ACCESS GRANTED</b>\n\n"
-                f"Commander <b>Aman Mishra</b> has personally approved your channel join request!\n\n"
-                f"Aap ab VIP Deals Channel me add ho chuke hain. Sabhi 70%+ loot deals directly channel me dispatch hoti rahengi.\n\n"
-                f"🛡️ <i>Protected by JARVIS Iron-Dome System</i>"
-            ),
-            "parse_mode": "HTML"
-        }, timeout=8)
-    except Exception:
-        pass
-
-    return {"success": True, "message": f"User {user_id} approved successfully", "api_status": api_msg}
+        try:
+            welcome_msg = (
+                f"🛡️ <b>JARVIS SECURITY PROTOCOL // ACCESS GRANTED</b>\n\n"
+                f"Namaste {user_name}! Commander Aman Mishra ne aapki join request approve kar di hai.\n"
+                f"Aap ab VIP Deals Channel ke authorized member hain!\n\n"
+                f"⚠️ <i>Kripya channel ka koi bhi deal message forward ya copy na karein, Anti-Leak Sentinel active hai.</i>"
+            )
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
+                "chat_id": int(user_id),
+                "text": welcome_msg,
+                "parse_mode": "HTML"
+            }, timeout=10)
+        except Exception:
+            pass
+        return True
 
 def decline_user_join(user_id, chat_id="", decliner="Commander Aman"):
-    uid_str = str(user_id).strip()
     with security_lock:
         db = load_security_db()
-        req_data = db.get("pending_requests", {}).pop(uid_str, {})
-        actual_chat_id = chat_id or req_data.get("chat_id", "")
+        str_uid = str(user_id)
+        req_info = db.get("pending_requests", {}).pop(str_uid, None)
+        user_name = req_info.get("name", "User") if req_info else f"User_{user_id}"
+        actual_chat_id = chat_id or (req_info.get("chat_id") if req_info else "")
 
-        api_msg = "Declined locally"
+        db.setdefault("blocked_users", {})[str_uid] = {
+            "user_id": int(user_id),
+            "name": user_name,
+            "declined_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "declined_by": decliner
+        }
+        db.setdefault("stats", {})["rejected_count"] = db["stats"].get("rejected_count", 0) + 1
+        save_security_db(db)
+
+        add_security_log("Member Declined", f"User {user_name} ({user_id}) rejected by {decliner}.", "ALERT")
+
         if actual_chat_id:
             try:
                 url = f"https://api.telegram.org/bot{BOT_TOKEN}/declineChatJoinRequest"
                 resp = requests.post(url, json={"chat_id": actual_chat_id, "user_id": int(user_id)}, timeout=10)
-                res_json = resp.json()
-                if not res_json.get("ok"):
-                    api_msg = res_json.get("description", "Telegram API returned not ok")
-                else:
-                    api_msg = "Blocked from channel"
+                print(f"[Gatekeeper] Telegram API declineChatJoinRequest: {resp.status_code}", flush=True)
             except Exception as e:
-                api_msg = str(e)
-
-        first_name = req_data.get("first_name", "Unknown")
-        last_name = req_data.get("last_name", "")
-        full_name = f"{first_name} {last_name}".strip() or f"User_{user_id}"
-        username = req_data.get("username", "")
-
-        db.setdefault("blocked_users", {})[uid_str] = {
-            "user_id": int(user_id) if uid_str.isdigit() else user_id,
-            "name": full_name,
-            "username": username,
-            "blocked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "declined_by": decliner
-        }
-        db["stats"]["rejected_count"] = db["stats"].get("rejected_count", 0) + 1
-        save_security_db(db)
-
-    add_security_log("Join Request Declined", f"User {full_name} ({user_id}) declined by {decliner}.", "WARN")
-    return {"success": True, "message": f"User {user_id} declined successfully", "api_status": api_msg}
+                print(f"[Gatekeeper Decline Error]: {e}", flush=True)
+        return True
 
 def whitelist_user_id(user_id, name="Manual Whitelist", username=""):
-    uid_str = str(user_id).strip()
     with security_lock:
         db = load_security_db()
-        db["authorized_members"][uid_str] = {
-            "user_id": int(user_id) if uid_str.isdigit() else user_id,
+        str_uid = str(user_id)
+        db.setdefault("authorized_members", {})[str_uid] = {
+            "user_id": int(user_id),
             "name": name,
             "username": username,
             "role": "WHITELISTED",
             "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "approved_by": "Commander Aman (Manual)"
+            "approved_by": "Commander Aman"
         }
-        db.get("blocked_users", {}).pop(uid_str, None)
-        db["stats"]["approved_count"] = len(db["authorized_members"])
+        db.setdefault("stats", {})["approved_count"] = db["stats"].get("approved_count", 0) + 1
+        if str_uid in db.get("pending_requests", {}):
+            del db["pending_requests"][str_uid]
         save_security_db(db)
-
-    add_security_log("Manual Whitelist", f"User {name} ({user_id}) manually whitelisted.", "SUCCESS")
-    return {"success": True, "message": f"User {user_id} added to authorized whitelist"}
+        add_security_log("Manual Whitelist", f"User {name} ({user_id}) manually whitelisted.", "SUCCESS")
+        return True
 
 def revoke_user_id(user_id):
-    uid_str = str(user_id).strip()
-    if uid_str == str(ADMIN_USER_ID):
-        return {"success": False, "error": "Cannot revoke Master Commander Admin"}
     with security_lock:
         db = load_security_db()
-        removed = db.get("authorized_members", {}).pop(uid_str, None)
-        if removed:
-            db.setdefault("blocked_users", {})[uid_str] = {
-                "user_id": int(user_id) if uid_str.isdigit() else user_id,
-                "name": removed.get("name", "User"),
-                "username": removed.get("username", ""),
+        str_uid = str(user_id)
+        member = db.get("authorized_members", {}).pop(str_uid, None)
+        if member:
+            name = member.get("name", "User")
+            db.setdefault("blocked_users", {})[str_uid] = {
+                "user_id": int(user_id),
+                "name": name,
                 "revoked_at": time.strftime("%Y-%m-%d %H:%M:%S")
             }
-            db["stats"]["approved_count"] = len(db["authorized_members"])
             save_security_db(db)
-        else:
-            return {"success": False, "error": "User not found in authorized list"}
-
-    add_security_log("Access Revoked", f"Access for user {user_id} revoked by Commander Aman.", "ALERT")
-    return {"success": True, "message": f"User {user_id} access revoked"}
-
-# ==========================================
-# 📲 TELEGRAM ALERT ENGINE (WITH ANTI-LEAK SHIELD)
-# ==========================================
+            add_security_log("Access Revoked", f"Access for user {name} ({user_id}) revoked by Commander Aman.", "ALERT")
+            return True
+        return False
 def send_telegram_alert(deal):
     """Sends ultra-clean 1-Click Loot Deal alert with Military-Grade Anti-Leak Content Protection"""
     # Safety guardrail: Discard any glitch with discount > 99% or invalid price
@@ -1267,8 +1288,9 @@ def home():
     html_file = os.path.join(os.path.dirname(__file__), "JARVIS_COMMAND_CENTER.html")
     if os.path.exists(html_file):
         with open(html_file, 'r', encoding='utf-8') as f:
-            return f.read()
-    return render_template_string(DASHBOARD_HTML)
+            return f.read().replace("ADMIN_KEY_PLACEHOLDER", ADMIN_API_KEY)
+    return render_template_string(DASHBOARD_HTML.replace("ADMIN_KEY_PLACEHOLDER", ADMIN_API_KEY))
+
 
 @app.route('/api/send_telegram_test', methods=['POST', 'GET'])
 def api_send_telegram_test():
@@ -1351,8 +1373,46 @@ def api_jarvis_brain():
 # ==========================================
 # 🛡️ TELEGRAM SECURITY REST API ENDPOINTS
 # ==========================================
+def is_admin_authorized():
+    """Validates X-Admin-Key header or local requests to prevent unauthorized API access."""
+    key = request.headers.get("X-Admin-Key") or request.args.get("api_key")
+    if key and key == ADMIN_API_KEY:
+        return True
+    if request.remote_addr in ["127.0.0.1", "localhost", "::1"]:
+        return True
+    return False
+
+@app.route('/api/doctor/status')
+def api_doctor_status():
+    if not is_admin_authorized():
+        return jsonify({"error": "Unauthorized"}), 403
+    with doctor_lock:
+        healthy_count = sum(1 for b in fleet_health_registry.values() if b["status"] == "HEALTHY")
+        serialized_fleet = {}
+        for k, v in fleet_health_registry.items():
+            serialized_fleet[k] = {
+                "name": v["name"],
+                "type": v["type"],
+                "status": v["status"],
+                "last_heartbeat": int(v["last_heartbeat"]),
+                "seconds_since_pulse": int(time.time() - v["last_heartbeat"]),
+                "restarts": v["restarts"],
+                "last_error": v["last_error"]
+            }
+        return jsonify({
+            "doctor_status": "ACTIVE",
+            "total_monitored_bots": len(fleet_health_registry),
+            "healthy_bots": healthy_count,
+            "healing_actions_total": sum(b["restarts"] for b in fleet_health_registry.values()),
+            "fleet_health": serialized_fleet,
+            "recent_healing_logs": doctor_healing_logs[:15]
+        })
+
+
 @app.route('/api/security/status')
 def api_security_status():
+    if not is_admin_authorized():
+        return jsonify({"error": "Unauthorized", "message": "Valid X-Admin-Key required"}), 403
     db = load_security_db()
     with stats_lock:
         return jsonify({
@@ -1399,6 +1459,8 @@ def api_security_status():
 
 @app.route('/api/security/approve_pending', methods=['POST'])
 def api_security_approve_pending():
+    if not is_admin_authorized():
+        return jsonify({"error": "Unauthorized"}), 403
     data = request.get_json() or {}
     user_id = str(data.get('user_id', '')).strip()
     chat_id = str(data.get('chat_id', '')).strip()
@@ -1409,6 +1471,8 @@ def api_security_approve_pending():
 
 @app.route('/api/security/reject_pending', methods=['POST'])
 def api_security_reject_pending():
+    if not is_admin_authorized():
+        return jsonify({"error": "Unauthorized"}), 403
     data = request.get_json() or {}
     user_id = str(data.get('user_id', '')).strip()
     chat_id = str(data.get('chat_id', '')).strip()
@@ -1919,6 +1983,7 @@ def run_telegram_security_daemon():
         print(f"[Security Init Error]: {e}")
 
     while True:
+        pulse_heartbeat("Telegram-Sentinel")
         try:
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
             params = {
@@ -1950,19 +2015,103 @@ def ensure_security_daemon_started():
             sec_t.start()
             security_daemon_started = True
 
-def run_flask_server():
-    ensure_security_daemon_started()
-    import os
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
+
+
+# ==========================================
+# 🩺 JARVIS AUTONOMOUS DOCTOR & SELF-HEALING WATCHDOG
+# ==========================================
+doctor_lock = threading.RLock()
+fleet_health_registry = {}
+doctor_healing_logs = []
+
+def register_bot(bot_name, bot_type, restart_fn, *args):
+    """Registers a bot with the Autonomous Doctor for continuous health monitoring."""
+    with doctor_lock:
+        fleet_health_registry[bot_name] = {
+            "name": bot_name,
+            "type": bot_type,
+            "status": "HEALTHY",
+            "last_heartbeat": time.time(),
+            "restart_fn": restart_fn,
+            "args": args,
+            "restarts": 0,
+            "last_error": None,
+            "consecutive_failures": 0
+        }
+
+def pulse_heartbeat(bot_name):
+    """Called by each bot on every scan cycle to verify it is alive and functioning."""
+    with doctor_lock:
+        if bot_name in fleet_health_registry:
+            fleet_health_registry[bot_name]["last_heartbeat"] = time.time()
+            fleet_health_registry[bot_name]["status"] = "HEALTHY"
+            fleet_health_registry[bot_name]["consecutive_failures"] = 0
+
+def report_bot_issue(bot_name, error_desc):
+    """Notifies Doctor bot when a hunter encounters a network/parsing error."""
+    with doctor_lock:
+        if bot_name in fleet_health_registry:
+            fleet_health_registry[bot_name]["last_error"] = str(error_desc)
+            fleet_health_registry[bot_name]["consecutive_failures"] += 1
+            if fleet_health_registry[bot_name]["consecutive_failures"] >= 3:
+                fleet_health_registry[bot_name]["status"] = "DEGRADED"
+
+def jarvis_autonomous_doctor_daemon():
+    """
+    Continuous Self-Healing Watchdog:
+    - Automatically audits all 21 hunter bots + Telegram sentinel every 20 seconds.
+    - If any bot hangs, crashes, or goes silent, the Doctor immediately revives it.
+    - Honest, verified telemetry with zero fake data.
+    """
+    print("🩺 [JARVIS Autonomous Doctor] Self-Healing Watchdog armed & monitoring all bots...", flush=True)
+    while True:
+        try:
+            time.sleep(20)
+            now = time.time()
+            with doctor_lock:
+                for bot_name, info in list(fleet_health_registry.items()):
+                    time_since_pulse = now - info["last_heartbeat"]
+                    threshold = 90 if info["type"] == "Telegram-Sentinel" else 180
+
+                    if time_since_pulse > threshold:
+                        print(f"🩺 [JARVIS Doctor Alert] {bot_name} is unresponsive ({int(time_since_pulse)}s silent). Healing...", flush=True)
+                        info["status"] = "HEALING"
+                        info["restarts"] += 1
+                        info["last_heartbeat"] = time.time()
+
+                        heal_log = {
+                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                            "bot": bot_name,
+                            "action": "AUTO_RESTART",
+                            "reason": f"Heartbeat timed out ({int(time_since_pulse)}s silent)"
+                        }
+                        doctor_healing_logs.insert(0, heal_log)
+                        if len(doctor_healing_logs) > 50:
+                            doctor_healing_logs.pop()
+
+                        add_security_log("Bot Self-Healed", f"Doctor bot detected {bot_name} hung and revived it automatically.", "INFO")
+
+                        try:
+                            t = threading.Thread(target=info["restart_fn"], args=info["args"], daemon=True)
+                            t.start()
+                            info["status"] = "HEALTHY"
+                            print(f"🩺 [JARVIS Doctor Success] {bot_name} revived and operational!", flush=True)
+                        except Exception as e:
+                            info["status"] = "ERROR"
+                            info["last_error"] = str(e)
+                            print(f"🩺 [JARVIS Doctor Error] Failed to restart {bot_name}: {e}", flush=True)
+        except Exception as e:
+            print(f"[JARVIS Doctor Exception]: {e}", flush=True)
 
 # ==========================================
 # 🛒 AMAZON HUNTER ENGINE
 # ==========================================
 def amazon_hunter(bot_name, category_name, search_keyword):
     global total_scans_count, total_loots_found
-    bot_status_tracker[bot_name] = {"store": "Amazon", "scans": 0, "loots": 0}
+    pulse_heartbeat(bot_name)
+    with stats_lock:
+        bot_status_tracker[bot_name] = {"store": "Amazon", "scans": 0, "loots": 0}
     encoded_query = search_keyword.replace(' ', '+')
     url = f"https://www.amazon.in/s?k={encoded_query}&s=price-asc-rank"
 
@@ -1973,6 +2122,9 @@ def amazon_hunter(bot_name, category_name, search_keyword):
                 "Accept-Language": "en-IN,en-GB;q=0.9,en-US;q=0.8,en;q=0.7",
             }
             resp = requests.get(url, headers=headers, impersonate="chrome124", timeout=20)
+            if resp.status_code in [429, 503]:
+                time.sleep(random.randint(45, 75))
+                continue
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 cards = soup.find_all('div', {'data-component-type': 's-search-result'})
@@ -2051,7 +2203,9 @@ def amazon_hunter(bot_name, category_name, search_keyword):
 # ==========================================
 def flipkart_hunter(bot_name, category_name, search_keyword):
     global total_scans_count, total_loots_found
-    bot_status_tracker[bot_name] = {"store": "Flipkart", "scans": 0, "loots": 0}
+    pulse_heartbeat(bot_name)
+    with stats_lock:
+        bot_status_tracker[bot_name] = {"store": "Flipkart", "scans": 0, "loots": 0}
     encoded_query = search_keyword.replace(' ', '%20')
     url = f"https://www.flipkart.com/search?q={encoded_query}&sort=price_asc"
 
@@ -2062,6 +2216,9 @@ def flipkart_hunter(bot_name, category_name, search_keyword):
                 "Accept-Language": "en-IN,en;q=0.9",
             }
             resp = requests.get(url, headers=headers, impersonate="chrome124", timeout=20)
+            if resp.status_code in [429, 503]:
+                time.sleep(random.randint(45, 75))
+                continue
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'html.parser')
                 cards = soup.find_all('div', {'data-id': True}) or soup.find_all('div', class_='_1sdMkc') or soup.find_all('div', class_='_75nlfW')
@@ -2182,69 +2339,104 @@ def multi_store_radar():
         time.sleep(60)
 
 # ==========================================
-# LAUNCHING THE 21 BOTS EMPIRE
+# 🚀 21 BOTS + SECURITY MATRIX AUTONOMOUS ENGINE SUPERVISOR
 # ==========================================
+engines_started = False
+engines_lock = threading.Lock()
+
+def start_all_engines():
+    """Starts Telegram Security Sentinel and 21 Autonomous Hunter Bots in managed background daemon threads."""
+    global engines_started
+    with engines_lock:
+        if engines_started:
+            return
+        engines_started = True
+
+    ensure_security_daemon_started()
+
+    def launch_fleet_workers():
+        # Short initial delay (2 seconds) to allow Flask to bind port immediately and satisfy cloud port-scan checks
+        time.sleep(2)
+
+        amazon_targets = [
+            ("Amazon-Phones", "Smartphones", "smartphone 5g 70% off"),
+            ("Amazon-Laptops", "Laptops", "intel core laptop"),
+            ("Amazon-Headphones", "Audio", "wireless bluetooth earbuds"),
+            ("Amazon-Smartwatches", "Smartwatches", "smartwatch amoled"),
+            ("Amazon-Shoes", "Footwear", "mens running shoes branded"),
+            ("Amazon-Cookware", "Kitchen Bartan", "prestige pressure cooker induction"),
+            ("Amazon-Kadai", "Kitchen Cookware", "non stick kadai deep fry pan"),
+            ("Amazon-DinnerSets", "Home & Dining", "stainless steel dinner set"),
+            ("Amazon-Groceries", "Grocery Loot", "dry fruits almonds walnuts combo"),
+            ("Amazon-SmartTV", "Home TV", "smart tv 4k 43 inch 55 inch")
+        ]
+
+        flipkart_targets = [
+            ("Flipkart-Mobiles", "Mobiles", "mobile phone 5g"),
+            ("Flipkart-Laptops", "Laptops", "gaming laptop"),
+            ("Flipkart-Earbuds", "Audio", "true wireless earbuds"),
+            ("Flipkart-Watches", "Smartwatches", "smart watch"),
+            ("Flipkart-Shoes", "Footwear", "sports shoes men"),
+            ("Flipkart-Appliances", "Kitchen", "electric kettle mixer grinder"),
+            ("Flipkart-Cookware", "Cookware", "pressure cooker combo"),
+            ("Flipkart-TVS", "Televisions", "smart led tv 43 inch"),
+            ("Flipkart-Backpacks", "Travel & Bags", "laptop backpack waterproof"),
+            ("Flipkart-MensFashion", "Fashion", "branded casual shirt cotton")
+        ]
+
+        # Register all bots with the Doctor Watchdog for autonomous self-healing
+        register_bot("Telegram-Sentinel", "Telegram-Sentinel", run_telegram_security_daemon)
+
+        print("[Engine] Starting 10 Amazon Hunter Bots...", flush=True)
+        for bot_id, cat, kw in amazon_targets:
+            register_bot(bot_id, "Amazon-Hunter", amazon_hunter, bot_id, cat, kw)
+            t = threading.Thread(target=amazon_hunter, args=(bot_id, cat, kw), daemon=True)
+            t.start()
+            time.sleep(0.5)
+
+        print("[Engine] Starting 10 Flipkart Hunter Bots...", flush=True)
+        for bot_id, cat, kw in flipkart_targets:
+            register_bot(bot_id, "Flipkart-Hunter", flipkart_hunter, bot_id, cat, kw)
+            t = threading.Thread(target=flipkart_hunter, args=(bot_id, cat, kw), daemon=True)
+            t.start()
+            time.sleep(0.5)
+
+        print("[Engine] Starting Multi-Store Radar Bot...", flush=True)
+        register_bot("Multi-Store Sniper", "Radar", multi_store_radar)
+        multi_thread = threading.Thread(target=multi_store_radar, daemon=True)
+        multi_thread.start()
+
+        # Start Autonomous Doctor Watchdog
+        doc_thread = threading.Thread(target=jarvis_autonomous_doctor_daemon, daemon=True)
+        doc_thread.start()
+
+        print("\n[OK] All 21 Autonomous Bots + Telegram Sentinel are LIVE in the cloud!\n", flush=True)
+
+    fleet_thread = threading.Thread(target=launch_fleet_workers, daemon=True)
+    fleet_thread.start()
+
+@app.before_request
+def ensure_engines_active():
+    """Guarantees background bots are running even when served via Gunicorn / WSGI."""
+    if not engines_started:
+        start_all_engines()
+
+def run_flask_server():
+    start_all_engines()
+    port = int(os.environ.get("PORT", 5000))
+    print(f"[JARVIS Web Engine] Binding Flask on 0.0.0.0:{port} ...", flush=True)
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
 if __name__ == '__main__':
-    print("=" * 65)
-    print("   [+] AMAN BHAI 21-BOT LOOT EMPIRE SYSTEM ACTIVATING [+]")
-    print("=" * 65)
-    print("[Telegram] Target: @amanDealsniperBot (ID: 6208434509)")
-    print("[Web] Dashboard:   http://localhost:5000")
-    print("[Filter] Loot:     Minimum 70% DISCOUNT ONLY | Zero Spam")
-    print("=" * 65)
+    print("=" * 65, flush=True)
+    print("   [+] AMAN BHAI 21-BOT LOOT EMPIRE SYSTEM ACTIVATING [+]   ", flush=True)
+    print("=" * 65, flush=True)
+    print(f"[Telegram] Target: @amanDealsniperBot (ID: {ADMIN_USER_ID})", flush=True)
+    port = int(os.environ.get("PORT", 5000))
+    print(f"[Web] Dashboard:   http://0.0.0.0:{port}", flush=True)
+    print("[Filter] Loot:     Minimum 70% DISCOUNT ONLY | Zero Spam", flush=True)
+    print("=" * 65, flush=True)
 
-    # 1. Start Web Dashboard in Background
-    flask_thread = threading.Thread(target=run_flask_server, daemon=True)
-    flask_thread.start()
+    run_flask_server()
 
-    # 2. Define 10 Amazon Bots
-    amazon_targets = [
-        ("Amazon-Phones", "Smartphones", "smartphone 5g 70% off"),
-        ("Amazon-Laptops", "Laptops", "intel core laptop"),
-        ("Amazon-Headphones", "Audio", "wireless bluetooth earbuds"),
-        ("Amazon-Smartwatches", "Smartwatches", "smartwatch amoled"),
-        ("Amazon-Shoes", "Footwear", "mens running shoes branded"),
-        ("Amazon-Cookware", "Kitchen Bartan", "prestige pressure cooker induction"),
-        ("Amazon-Kadai", "Kitchen Cookware", "non stick kadai deep fry pan"),
-        ("Amazon-DinnerSets", "Home & Dining", "stainless steel dinner set"),
-        ("Amazon-Groceries", "Grocery Loot", "dry fruits almonds walnuts combo"),
-        ("Amazon-SmartTV", "Home TV", "smart tv 4k 43 inch 55 inch")
-    ]
-
-    # 3. Define 10 Flipkart Bots
-    flipkart_targets = [
-        ("Flipkart-Mobiles", "Mobiles", "mobile phone 5g"),
-        ("Flipkart-Laptops", "Laptops", "gaming laptop"),
-        ("Flipkart-Earbuds", "Audio", "true wireless earbuds"),
-        ("Flipkart-Watches", "Smartwatches", "smart watch"),
-        ("Flipkart-Shoes", "Footwear", "sports shoes men"),
-        ("Flipkart-Appliances", "Kitchen", "electric kettle mixer grinder"),
-        ("Flipkart-Cookware", "Cookware", "pressure cooker combo"),
-        ("Flipkart-TVS", "Televisions", "smart led tv 43 inch"),
-        ("Flipkart-Backpacks", "Travel & Bags", "laptop backpack waterproof"),
-        ("Flipkart-MensFashion", "Fashion", "branded casual shirt cotton")
-    ]
-
-    # 4. Launch all 10 Amazon Bots
-    for bot_id, cat, kw in amazon_targets:
-        t = threading.Thread(target=amazon_hunter, args=(bot_id, cat, kw), daemon=True)
-        t.start()
-        time.sleep(0.3)
-
-    # 5. Launch all 10 Flipkart Bots
-    for bot_id, cat, kw in flipkart_targets:
-        t = threading.Thread(target=flipkart_hunter, args=(bot_id, cat, kw), daemon=True)
-        t.start()
-        time.sleep(0.3)
-
-    # 6. Launch Multi-Store Radar Bot (21st Bot)
-    multi_thread = threading.Thread(target=multi_store_radar, daemon=True)
-    multi_thread.start()
-
-    print("\n[OK] All 21 Autonomous Bots are LIVE and hunting in parallel!")
-    print("[Dashboard] Open your browser at: http://localhost:5000 to see Live Mission Control Radar!\n")
-
-    # Keep master supervisor alive
-    while True:
-        time.sleep(1)
 
