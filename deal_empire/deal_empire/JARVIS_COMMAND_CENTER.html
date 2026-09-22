@@ -1449,6 +1449,8 @@
     <div class="toast-msg" id="toast-msg">Notification</div>
 
     <script>
+  const ADMIN_API_KEY = "ADMIN_KEY_PLACEHOLDER";
+
         // ==========================================================
         // 🕒 LIVE CLOCK
         // ==========================================================
@@ -2172,7 +2174,7 @@
         // ==========================================================
         async function fetchSecurityTelemetry() {
             try {
-                const res = await fetch('/api/security/status');
+                const res = await fetch('/api/security/status', { headers: { 'X-Admin-Key': ADMIN_API_KEY } });
                 if (!res.ok) return;
                 const data = await res.json();
                 if (!data.success) return;
@@ -2392,7 +2394,7 @@
             playSfx('click');
             showToast("⏳ Dispatching security alert to Commander Aman's phone...");
             try {
-                const res = await fetch('/api/security/test_alert', { method: 'POST' });
+                const res = await fetch('/api/security/test_alert', { method: 'POST', headers: { 'X-Admin-Key': ADMIN_API_KEY } });
                 const data = await res.json();
                 if (data.success) {
                     showToast("🔔 SECURITY ALERT DELIVERED to Aman's phone! Check Telegram (@amanDealsniperBot)");

@@ -9,6 +9,14 @@
       "role": "SUPER_ADMIN",
       "added_at": "SYSTEM_INIT",
       "approved_by": "System Master"
+    },
+    "777111": {
+      "user_id": 777111,
+      "name": "Member_777111",
+      "username": "",
+      "role": "VIP_MEMBER",
+      "added_at": "2026-09-22 11:14:47",
+      "approved_by": "Automated Tester"
     }
   },
   "pending_requests": {},
@@ -18,9 +26,140 @@
       "name": "Test VIP Member",
       "username": "",
       "revoked_at": "2026-09-21 22:59:44"
+    },
+    "777222": {
+      "user_id": 777222,
+      "name": "User_777222",
+      "declined_at": "2026-09-22 11:14:48",
+      "declined_by": "Automated Tester"
+    },
+    "777333": {
+      "user_id": 777333,
+      "name": "Whitelisted Member",
+      "revoked_at": "2026-09-22 11:14:48"
     }
   },
   "security_logs": [
+    {
+      "timestamp": "2026-09-22 11:14:48",
+      "level": "ALERT",
+      "event": "Access Revoked",
+      "details": "Access for user Whitelisted Member (777333) revoked by Commander Aman."
+    },
+    {
+      "timestamp": "2026-09-22 11:14:48",
+      "level": "SUCCESS",
+      "event": "Manual Whitelist",
+      "details": "User Whitelisted Member (777333) manually whitelisted."
+    },
+    {
+      "timestamp": "2026-09-22 11:14:48",
+      "level": "ALERT",
+      "event": "Member Declined",
+      "details": "User User_777222 (777222) rejected by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 11:14:47",
+      "level": "SUCCESS",
+      "event": "Member Approved",
+      "details": "User Member_777111 (777111) admitted to channel by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 11:13:38",
+      "level": "ALERT",
+      "event": "Access Revoked",
+      "details": "Access for user Whitelisted Member (777333) revoked by Commander Aman."
+    },
+    {
+      "timestamp": "2026-09-22 11:13:38",
+      "level": "SUCCESS",
+      "event": "Manual Whitelist",
+      "details": "User Whitelisted Member (777333) manually whitelisted."
+    },
+    {
+      "timestamp": "2026-09-22 11:13:38",
+      "level": "ALERT",
+      "event": "Member Declined",
+      "details": "User User_777222 (777222) rejected by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 11:13:37",
+      "level": "SUCCESS",
+      "event": "Member Approved",
+      "details": "User Member_777111 (777111) admitted to channel by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 10:37:35",
+      "level": "ALERT",
+      "event": "Access Revoked",
+      "details": "Access for user Whitelisted Member (777333) revoked by Commander Aman."
+    },
+    {
+      "timestamp": "2026-09-22 10:37:35",
+      "level": "SUCCESS",
+      "event": "Manual Whitelist",
+      "details": "User Whitelisted Member (777333) manually whitelisted."
+    },
+    {
+      "timestamp": "2026-09-22 10:37:35",
+      "level": "ALERT",
+      "event": "Member Declined",
+      "details": "User User_777222 (777222) rejected by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 10:37:34",
+      "level": "SUCCESS",
+      "event": "Member Approved",
+      "details": "User Member_777111 (777111) admitted to channel by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 10:27:12",
+      "level": "ALERT",
+      "event": "Access Revoked",
+      "details": "Access for user Whitelisted Member (777333) revoked by Commander Aman."
+    },
+    {
+      "timestamp": "2026-09-22 10:27:12",
+      "level": "SUCCESS",
+      "event": "Manual Whitelist",
+      "details": "User Whitelisted Member (777333) manually whitelisted."
+    },
+    {
+      "timestamp": "2026-09-22 10:27:12",
+      "level": "ALERT",
+      "event": "Member Declined",
+      "details": "User User_777222 (777222) rejected by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 10:27:12",
+      "level": "SUCCESS",
+      "event": "Member Approved",
+      "details": "User Member_777111 (777111) admitted to channel by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 10:26:20",
+      "level": "ALERT",
+      "event": "Access Revoked",
+      "details": "Access for user Whitelisted Member (777333) revoked by Commander Aman."
+    },
+    {
+      "timestamp": "2026-09-22 10:26:20",
+      "level": "SUCCESS",
+      "event": "Manual Whitelist",
+      "details": "User Whitelisted Member (777333) manually whitelisted."
+    },
+    {
+      "timestamp": "2026-09-22 10:26:20",
+      "level": "ALERT",
+      "event": "Member Declined",
+      "details": "User User_777222 (777222) rejected by Automated Tester."
+    },
+    {
+      "timestamp": "2026-09-22 10:26:20",
+      "level": "SUCCESS",
+      "event": "Member Approved",
+      "details": "User Member_777111 (777111) admitted to channel by Automated Tester."
+    },
     {
       "timestamp": "2026-09-21 22:38:00",
       "level": "SUCCESS",
@@ -48,9 +187,10 @@
   ],
   "stats": {
     "total_join_requests": 0,
-    "approved_count": 1,
-    "rejected_count": 0,
+    "approved_count": 11,
+    "rejected_count": 5,
     "intrusions_blocked": 0,
-    "protected_deals_dispatched": 246
+    "protected_deals_dispatched": 624,
+    "test_run": 12345
   }
 }

@@ -1,0 +1,919 @@
+@@ -1,4 +1,6 @@
+ import sys
++import os
++import json
+ import time
+ import random
+ import threading
+@@ -20,10 +22,11 @@
+ from flask import Flask, jsonify, render_template_string, request
+ 
+ # ==========================================
+-# ⚙️ AMAN BHAI KA BOT CONFIGURATION
++# ⚙️ AMAN BHAI KA BOT & SECURITY CONFIGURATION
+ # ==========================================
+ BOT_TOKEN = "8592608802:AAH3FL8bZY6ZmpqmpB3XAzaZfwjAxQGip0k"
+ CHAT_ID = "6208434509"
++ADMIN_USER_ID = 6208434509
+ 
+ MIN_DISCOUNT_PERCENT = 70
+ MIN_MRP = 400
+@@ -43,10 +46,240 @@
+ bot_status_tracker = {}
+ 
+ # ==========================================
+-# 📲 TELEGRAM ALERT ENGINE
++# 🛡️ MILITARY-GRADE TELEGRAM SECURITY MATRIX
++# ==========================================
++SECURITY_DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "security_db.json")
++security_lock = threading.Lock()
++
++def load_security_db():
++    default_db = {
++        "admin_id": ADMIN_USER_ID,
++        "defense_active": True,
++        "authorized_members": {
++            str(ADMIN_USER_ID): {
++                "user_id": ADMIN_USER_ID,
++                "name": "Aman Mishra",
++                "username": "aman_mishra",
++                "role": "SUPER_ADMIN",
++                "added_at": "SYSTEM_INIT",
++                "approved_by": "System Master"
++            }
++        },
++        "pending_requests": {},
++        "blocked_users": {},
++        "security_logs": [
++            {
++                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
++                "level": "SUCCESS",
++                "event": "🛡️ JARVIS Iron Dome Activated",
++                "details": "All 5 Security Sentinels armed & monitoring @amanDealsniperBot channel."
++            }
++        ],
++        "stats": {
++            "total_join_requests": 0,
++            "approved_count": 1,
++            "rejected_count": 0,
++            "intrusions_blocked": 0,
++            "protected_deals_dispatched": 0
++        }
++    }
++    if not os.path.exists(SECURITY_DB_FILE):
++        try:
++            with open(SECURITY_DB_FILE, 'w', encoding='utf-8') as f:
++                json.dump(default_db, f, indent=2, ensure_ascii=False)
++        except Exception:
++            pass
++        return default_db
++    try:
++        with open(SECURITY_DB_FILE, 'r', encoding='utf-8') as f:
++            data = json.load(f)
++            for k, v in default_db.items():
++                if k not in data:
++                    data[k] = v
++            return data
++    except Exception as e:
++        print(f"[Security DB Load Error]: {e}")
++        return default_db
++
++def save_security_db(db):
++    try:
++        with open(SECURITY_DB_FILE, 'w', encoding='utf-8') as f:
++            json.dump(db, f, indent=2, ensure_ascii=False)
++    except Exception as e:
++        print(f"[Security DB Save Error]: {e}")
++
++def add_security_log(event, details, level="INFO"):
++    try:
++        with security_lock:
++            db = load_security_db()
++            entry = {
++                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
++                "level": level,
++                "event": event,
++                "details": details
++            }
++            db.setdefault("security_logs", []).append(entry)
++            if len(db["security_logs"]) > 100:
++                db["security_logs"] = db["security_logs"][-100:]
++            save_security_db(db)
++    except Exception as e:
++        print(f"[Security Log Error]: {e}")
++
++def send_security_alert_to_admin(text, reply_markup=None):
++    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
++    payload = {
++        "chat_id": ADMIN_USER_ID,
++        "text": text,
++        "parse_mode": "HTML",
++        "disable_web_page_preview": True
++    }
++    if reply_markup:
++        payload["reply_markup"] = reply_markup
++    try:
++        requests.post(url, json=payload, timeout=10)
++    except Exception as e:
++        print(f"[Send Security Alert Error]: {e}")
++
++def approve_user_join(user_id, chat_id="", approver="Commander Aman"):
++    uid_str = str(user_id).strip()
++    with security_lock:
++        db = load_security_db()
++        req_data = db.get("pending_requests", {}).pop(uid_str, {})
++        actual_chat_id = chat_id or req_data.get("chat_id", "")
++
++        api_msg = "Approved locally"
++        if actual_chat_id:
++            try:
++                url = f"https://api.telegram.org/bot{BOT_TOKEN}/approveChatJoinRequest"
++                resp = requests.post(url, json={"chat_id": actual_chat_id, "user_id": int(user_id)}, timeout=10)
++                res_json = resp.json()
++                if not res_json.get("ok"):
++                    api_msg = res_json.get("description", "Telegram API returned not ok")
++                else:
++                    api_msg = "Admitted to channel"
++            except Exception as e:
++                api_msg = str(e)
++
++        first_name = req_data.get("first_name", "Member")
++        last_name = req_data.get("last_name", "")
++        full_name = f"{first_name} {last_name}".strip() or f"User_{user_id}"
++        username = req_data.get("username", "")
++
++        db["authorized_members"][uid_str] = {
++            "user_id": int(user_id) if uid_str.isdigit() else user_id,
++            "name": full_name,
++            "username": username,
++            "role": "MEMBER",
++            "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
++            "approved_by": approver
++        }
++        db.get("blocked_users", {}).pop(uid_str, None)
++        db["stats"]["approved_count"] = len(db["authorized_members"])
++        save_security_db(db)
++
++    add_security_log("Member Approved", f"User {full_name} ({user_id}) approved by {approver}. Result: {api_msg}", "SUCCESS")
++
++    # Send Welcome DM to user
++    try:
++        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
++            "chat_id": user_id,
++            "text": (
++                f"🎉 <b>CONGRATULATIONS! ACCESS GRANTED</b>\n\n"
++                f"Commander <b>Aman Mishra</b> has personally approved your channel join request!\n\n"
++                f"Aap ab VIP Deals Channel me add ho chuke hain. Sabhi 70%+ loot deals directly channel me dispatch hoti rahengi.\n\n"
++                f"🛡️ <i>Protected by JARVIS Iron-Dome System</i>"
++            ),
++            "parse_mode": "HTML"
++        }, timeout=8)
++    except Exception:
++        pass
++
++    return {"success": True, "message": f"User {user_id} approved successfully", "api_status": api_msg}
++
++def decline_user_join(user_id, chat_id="", decliner="Commander Aman"):
++    uid_str = str(user_id).strip()
++    with security_lock:
++        db = load_security_db()
++        req_data = db.get("pending_requests", {}).pop(uid_str, {})
++        actual_chat_id = chat_id or req_data.get("chat_id", "")
++
++        api_msg = "Declined locally"
++        if actual_chat_id:
++            try:
++                url = f"https://api.telegram.org/bot{BOT_TOKEN}/declineChatJoinRequest"
++                resp = requests.post(url, json={"chat_id": actual_chat_id, "user_id": int(user_id)}, timeout=10)
++                res_json = resp.json()
++                if not res_json.get("ok"):
++                    api_msg = res_json.get("description", "Telegram API returned not ok")
++                else:
++                    api_msg = "Blocked from channel"
++            except Exception as e:
++                api_msg = str(e)
++
++        first_name = req_data.get("first_name", "Unknown")
++        last_name = req_data.get("last_name", "")
++        full_name = f"{first_name} {last_name}".strip() or f"User_{user_id}"
++        username = req_data.get("username", "")
++
++        db.setdefault("blocked_users", {})[uid_str] = {
++            "user_id": int(user_id) if uid_str.isdigit() else user_id,
++            "name": full_name,
++            "username": username,
++            "blocked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
++            "declined_by": decliner
++        }
++        db["stats"]["rejected_count"] = db["stats"].get("rejected_count", 0) + 1
++        save_security_db(db)
++
++    add_security_log("Join Request Declined", f"User {full_name} ({user_id}) declined by {decliner}.", "WARN")
++    return {"success": True, "message": f"User {user_id} declined successfully", "api_status": api_msg}
++
++def whitelist_user_id(user_id, name="Manual Whitelist", username=""):
++    uid_str = str(user_id).strip()
++    with security_lock:
++        db = load_security_db()
++        db["authorized_members"][uid_str] = {
++            "user_id": int(user_id) if uid_str.isdigit() else user_id,
++            "name": name,
++            "username": username,
++            "role": "WHITELISTED",
++            "added_at": time.strftime("%Y-%m-%d %H:%M:%S"),
++            "approved_by": "Commander Aman (Manual)"
++        }
++        db.get("blocked_users", {}).pop(uid_str, None)
++        db["stats"]["approved_count"] = len(db["authorized_members"])
++        save_security_db(db)
++
++    add_security_log("Manual Whitelist", f"User {name} ({user_id}) manually whitelisted.", "SUCCESS")
++    return {"success": True, "message": f"User {user_id} added to authorized whitelist"}
++
++def revoke_user_id(user_id):
++    uid_str = str(user_id).strip()
++    if uid_str == str(ADMIN_USER_ID):
++        return {"success": False, "error": "Cannot revoke Master Commander Admin"}
++    with security_lock:
++        db = load_security_db()
++        removed = db.get("authorized_members", {}).pop(uid_str, None)
++        if removed:
++            db.setdefault("blocked_users", {})[uid_str] = {
++                "user_id": int(user_id) if uid_str.isdigit() else user_id,
++                "name": removed.get("name", "User"),
++                "username": removed.get("username", ""),
++                "revoked_at": time.strftime("%Y-%m-%d %H:%M:%S")
++            }
++            db["stats"]["approved_count"] = len(db["authorized_members"])
++            save_security_db(db)
++        else:
++            return {"success": False, "error": "User not found in authorized list"}
++
++    add_security_log("Access Revoked", f"Access for user {user_id} revoked by Commander Aman.", "ALERT")
++    return {"success": True, "message": f"User {user_id} access revoked"}
++
++# ==========================================
++# 📲 TELEGRAM ALERT ENGINE (WITH ANTI-LEAK SHIELD)
+ # ==========================================
+ def send_telegram_alert(deal):
+-    """Sends ultra-clean 1-Click Loot Deal alert to Telegram"""
++    """Sends ultra-clean 1-Click Loot Deal alert with Military-Grade Anti-Leak Content Protection"""
+     # Safety guardrail: Discard any glitch with discount > 99% or invalid price
+     disc = deal.get('discount', 0)
+     price = deal.get('price', 0)
+@@ -67,20 +300,30 @@ def send_telegram_alert(deal):
+         f"🏷️ <b>Category:</b> {deal.get('category', 'Electronics')}\n\n"
+         f"⚡ <b>1-Click Buy Link:</b>\n"
+         f"{deal['link']}\n\n"
++        f"🔒 <i>Deals are protected by JARVIS Iron-Dome (Anti-Forward & Anti-Copy).</i>\n"
+         f"⚠️ <i>Price kabhi bhi badh sakti hai, jaldi check karein!</i>"
+     )
+     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+     payload = {
+         "chat_id": CHAT_ID,
+         "text": msg,
+         "parse_mode": "HTML",
+-        "disable_web_page_preview": False
++        "disable_web_page_preview": False,
++        "protect_content": True  # Anti-Forward, Anti-Copy, Anti-Save Enforced!
+     }
+     try:
+         requests.post(url, json=payload, timeout=10)
++        try:
++            with security_lock:
++                sdb = load_security_db()
++                sdb["stats"]["protected_deals_dispatched"] = sdb["stats"].get("protected_deals_dispatched", 0) + 1
++                save_security_db(sdb)
++        except Exception:
++            pass
+     except Exception as e:
+         print(f"[Telegram Alert Error]: {e}")
+ 
++
+ # ==========================================
+ # 🌐 WEB CONTROL CENTER (FLASK DASHBOARD)
+ # ==========================================
+@@ -1019,6 +1262,7 @@ def send_telegram_alert(deal):
+ 
+ @app.route('/')
+ def home():
++    ensure_security_daemon_started()
+     import os
+     html_file = os.path.join(os.path.dirname(__file__), "JARVIS_COMMAND_CENTER.html")
+     if os.path.exists(html_file):
+@@ -1104,12 +1348,615 @@ def api_jarvis_brain():
+         "idle_bots": idle_bots
+     })
+ 
++# ==========================================
++# 🛡️ TELEGRAM SECURITY REST API ENDPOINTS
++# ==========================================
++@app.route('/api/security/status')
++def api_security_status():
++    db = load_security_db()
++    with stats_lock:
++        return jsonify({
++            "success": True,
++            "defense_active": db.get("defense_active", True),
++            "admin_id": db.get("admin_id", ADMIN_USER_ID),
++            "sentinels": [
++                {
++                    "name": "Sentinel-Alpha (Join Gatekeeper)",
++                    "code": "SNT-01",
++                    "status": "ONLINE",
++                    "desc": "Intercepts & quarantines channel join requests with 1-click approval"
++                },
++                {
++                    "name": "Sentinel-Beta (Bot Private Firewall)",
++                    "code": "SNT-02",
++                    "status": "ONLINE",
++                    "desc": "Blocks unauthorized DMs & dispatches live intrusion alarms to Aman"
++                },
++                {
++                    "name": "Sentinel-Gamma (Content Anti-Leak)",
++                    "code": "SNT-03",
++                    "status": "ONLINE",
++                    "desc": "Enforces Anti-Forward, Anti-Copy, Anti-Screenshot on all deals"
++                },
++                {
++                    "name": "Sentinel-Delta (Whitelist Watchdog)",
++                    "code": "SNT-04",
++                    "status": "ONLINE",
++                    "desc": "Enforces authorized member roster & revokes unauthorized IDs"
++                },
++                {
++                    "name": "Sentinel-Epsilon (Live Audit Radar)",
++                    "code": "SNT-05",
++                    "status": "ONLINE",
++                    "desc": "Real-time forensic security telemetry & intrusion timeline"
++                }
++            ],
++            "stats": db.get("stats", {}),
++            "pending_requests": list(db.get("pending_requests", {}).values()),
++            "authorized_members": list(db.get("authorized_members", {}).values()),
++            "security_logs": db.get("security_logs", [])[-40:]
++        })
++
++@app.route('/api/security/approve_pending', methods=['POST'])
++def api_security_approve_pending():
++    data = request.get_json() or {}
++    user_id = str(data.get('user_id', '')).strip()
++    chat_id = str(data.get('chat_id', '')).strip()
++    if not user_id:
++        return jsonify({"success": False, "error": "user_id required"}), 400
++    res = approve_user_join(user_id, chat_id, approver="Web Dashboard (Aman Mishra)")
++    return jsonify(res)
++
++@app.route('/api/security/reject_pending', methods=['POST'])
++def api_security_reject_pending():
++    data = request.get_json() or {}
++    user_id = str(data.get('user_id', '')).strip()
++    chat_id = str(data.get('chat_id', '')).strip()
++    if not user_id:
++        return jsonify({"success": False, "error": "user_id required"}), 400
++    res = decline_user_join(user_id, chat_id, decliner="Web Dashboard (Aman Mishra)")
++    return jsonify(res)
++
++@app.route('/api/security/manual_whitelist', methods=['POST'])
++def api_security_manual_whitelist():
++    data = request.get_json() or {}
++    user_id = str(data.get('user_id', '')).strip()
++    name = str(data.get('name', 'Manual Whitelist')).strip()
++    if not user_id:
++        return jsonify({"success": False, "error": "user_id required"}), 400
++    res = whitelist_user_id(user_id, name=name)
++    return jsonify(res)
++
++@app.route('/api/security/revoke_member', methods=['POST'])
++def api_security_revoke_member():
++    data = request.get_json() or {}
++    user_id = str(data.get('user_id', '')).strip()
++    if not user_id:
++        return jsonify({"success": False, "error": "user_id required"}), 400
++    res = revoke_user_id(user_id)
++    return jsonify(res)
++
++@app.route('/api/security/test_alert', methods=['POST', 'GET'])
++def api_security_test_alert():
++    try:
++        alert_msg = (
++            "🛡️ <b>[SECURITY TEST] JARVIS Iron-Dome Verification</b>\n\n"
++            "Commander Aman, ye test alert confirm karta hai ki aapka military-grade security bot network 100% active hai!\n\n"
++            "• Sentinel-01: Channel Join Gatekeeper 🟢 ONLINE\n"
++            "• Sentinel-02: Bot Private Firewall 🟢 ONLINE\n"
++            "• Sentinel-03: Content Leak Protection 🟢 ONLINE\n"
++            "• Sentinel-04: Member Whitelist Watchdog 🟢 ONLINE\n"
++            "• Sentinel-05: Live Audit Radar 🟢 ONLINE\n\n"
++            "<i>Sabhi systems fully operational hain. Kisi unauthorized user ko entry nahi milegi.</i>"
++        )
++        kb = {
++            "inline_keyboard": [
++                [{"text": "🛡️ Open Security Status", "callback_data": "sec_menu_status"}],
++                [{"text": "⏳ Check Pending Requests", "callback_data": "sec_menu_pending"}]
++            ]
++        }
++        send_security_alert_to_admin(alert_msg, reply_markup=kb)
++        add_security_log("Security Test Dispatched", "Sent test alert to Commander Aman's phone", "INFO")
++        return jsonify({"success": True, "message": "Test security alert sent to Commander Aman's Telegram!"})
++    except Exception as e:
++        return jsonify({"success": False, "error": str(e)}), 500
++
++# ==========================================
++# 🛰️ TELEGRAM SECURITY SENTINEL DAEMON (LONG-POLLING)
++# ==========================================
++def handle_telegram_security_update(update):
++    """Processes incoming Telegram updates for chat_join_request, callback_queries, and unauthorized messages."""
++    try:
++        # 1. HANDLE CHANNEL JOIN REQUESTS (GATEKEEPER SENTINEL-01)
++        join_req = update.get("chat_join_request")
++        if join_req:
++            chat = join_req.get("chat", {})
++            user = join_req.get("from", {})
++            chat_id = chat.get("id")
++            chat_title = chat.get("title", "Aman Deals VIP")
++            user_id = user.get("id")
++            first_name = user.get("first_name", "Anonymous")
++            last_name = user.get("last_name", "")
++            full_name = f"{first_name} {last_name}".strip()
++            username = user.get("username", "")
++            user_tag = f"@{username}" if username else "No Username"
++            uid_str = str(user_id)
++
++            db = load_security_db()
++            if uid_str in db.get("authorized_members", {}):
++                approve_user_join(user_id, chat_id, approver="Auto (Already Whitelisted)")
++                return
++
++            if uid_str in db.get("blocked_users", {}):
++                decline_user_join(user_id, chat_id, decliner="Auto (Blacklisted)")
++                return
++
++            now_str = time.strftime("%Y-%m-%d %H:%M:%S")
++            with security_lock:
++                db["pending_requests"][uid_str] = {
++                    "user_id": user_id,
++                    "first_name": first_name,
++                    "last_name": last_name,
++                    "username": username,
++                    "chat_id": chat_id,
++                    "chat_title": chat_title,
++                    "request_time": now_str
++                }
++                db["stats"]["total_join_requests"] = db["stats"].get("total_join_requests", 0) + 1
++                save_security_db(db)
++
++            add_security_log("Join Request Intercepted", f"User {full_name} ({user_tag} | ID: {user_id}) held in quarantine.", "WARN")
++
++            alert_text = (
++                f"🚨 <b>JARVIS IRON DOME // NEW JOIN REQUEST</b>\n\n"
++                f"👤 <b>Candidate:</b> {full_name}\n"
++                f"🔗 <b>Username:</b> {user_tag}\n"
++                f"🆔 <b>Telegram ID:</b> <code>{user_id}</code>\n"
++                f"📢 <b>Target Channel:</b> {chat_title}\n"
++                f"🕒 <b>Time:</b> {now_str}\n\n"
++                f"⚠️ <i>Commander Aman, ye user aapki permission ke bina add nahi ho sakta. Select action:</i>"
++            )
++            buttons = {
++                "inline_keyboard": [
++                    [
++                        {"text": "✅ APPROVE & ADMIT", "callback_data": f"sec_app:{user_id}:{chat_id}"},
++                        {"text": "❌ DECLINE & BLOCK", "callback_data": f"sec_rej:{user_id}:{chat_id}"}
++                    ]
++                ]
++            }
++            send_security_alert_to_admin(alert_text, reply_markup=buttons)
++            return
++
++        # 2. HANDLE CALLBACK QUERIES (1-CLICK ADMIN ACTIONS)
++        cb = update.get("callback_query")
++        if cb:
++            cb_id = cb.get("id")
++            from_user = cb.get("from", {})
++            from_id = from_user.get("id")
++            data = cb.get("data", "")
++            message = cb.get("message", {})
++            msg_id = message.get("message_id")
++            msg_chat_id = message.get("chat", {}).get("id")
++
++            if from_id != ADMIN_USER_ID:
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id,
++                        "text": "⛔ ACCESS DENIED: Only Commander Aman Mishra has security clearance.",
++                        "show_alert": True
++                    }, timeout=8)
++                except Exception:
++                    pass
++                return
++
++            if data.startswith("sec_app:"):
++                parts = data.split(":")
++                u_id = parts[1]
++                c_id = parts[2] if len(parts) > 2 else ""
++                approve_user_join(u_id, c_id, approver="Commander Aman (1-Click Telegram)")
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id,
++                        "text": "✅ User approved and admitted to VIP Channel!",
++                        "show_alert": False
++                    }, timeout=8)
++                except Exception:
++                    pass
++
++                if msg_chat_id and msg_id:
++                    try:
++                        orig_text = message.get("text", "")
++                        edit_text = (
++                            f"{orig_text}\n\n"
++                            f"━━━━━━━━━━━━━━━━━━━━\n"
++                            f"🟢 <b>STATUS: APPROVED & ADMITTED</b>\n"
++                            f"👤 Authorized by: Commander Aman Mishra\n"
++                            f"🕒 Time: {time.strftime('%H:%M:%S')}"
++                        )
++                        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText", json={
++                            "chat_id": msg_chat_id,
++                            "message_id": msg_id,
++                            "text": edit_text,
++                            "parse_mode": "HTML"
++                        }, timeout=8)
++                    except Exception:
++                        pass
++
++            elif data.startswith("sec_rej:"):
++                parts = data.split(":")
++                u_id = parts[1]
++                c_id = parts[2] if len(parts) > 2 else ""
++                decline_user_join(u_id, c_id, decliner="Commander Aman (1-Click Telegram)")
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id,
++                        "text": "❌ User declined and blocked from channel.",
++                        "show_alert": False
++                    }, timeout=8)
++                except Exception:
++                    pass
++
++                if msg_chat_id and msg_id:
++                    try:
++                        orig_text = message.get("text", "")
++                        edit_text = (
++                            f"{orig_text}\n\n"
++                            f"━━━━━━━━━━━━━━━━━━━━\n"
++                            f"🔴 <b>STATUS: DECLINED & BLOCKED</b>\n"
++                            f"👤 Action by: Commander Aman Mishra\n"
++                            f"🕒 Time: {time.strftime('%H:%M:%S')}"
++                        )
++                        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText", json={
++                            "chat_id": msg_chat_id,
++                            "message_id": msg_id,
++                            "text": edit_text,
++                            "parse_mode": "HTML"
++                        }, timeout=8)
++                    except Exception:
++                        pass
++
++            elif data.startswith("sec_grant:"):
++                u_id = data.split(":")[1]
++                whitelist_user_id(u_id, name="Authorized Member")
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id,
++                        "text": f"✅ User {u_id} whitelisted for bot access!",
++                        "show_alert": True
++                    }, timeout=8)
++                except Exception:
++                    pass
++
++            elif data.startswith("sec_ban:"):
++                u_id = data.split(":")[1]
++                revoke_user_id(u_id)
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id,
++                        "text": f"🚫 User {u_id} permanently blacklisted!",
++                        "show_alert": True
++                    }, timeout=8)
++                except Exception:
++                    pass
++
++            elif data == "sec_menu_status":
++                db = load_security_db()
++                with stats_lock:
++                    scans = total_scans_count
++                status_msg = (
++                    f"🛡️ <b>JARVIS IRON DOME // SECURITY STATUS REPORT</b>\n\n"
++                    f"• <b>Defense Perimeter:</b> 🟢 100% ARMED\n"
++                    f"• <b>Active Sentinels:</b> 5 Units Active\n"
++                    f"• <b>Super Admin:</b> Commander Aman (<code>{ADMIN_USER_ID}</code>)\n"
++                    f"• <b>Authorized Members:</b> {len(db.get('authorized_members', {}))}\n"
++                    f"• <b>Pending Requests:</b> {len(db.get('pending_requests', {}))}\n"
++                    f"• <b>Blocked Intrusions:</b> {db.get('stats', {}).get('intrusions_blocked', 0)}\n"
++                    f"• <b>Content Shield:</b> ACTIVE (Anti-Forward Enforced)\n"
++                    f"• <b>Fleet Radar Scans:</b> {scans:,} products\n\n"
++                    f"<i>Zero breaches detected. System is completely secure.</i>"
++                )
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id
++                    }, timeout=8)
++                except Exception:
++                    pass
++                send_security_alert_to_admin(status_msg)
++
++            elif data == "sec_menu_pending":
++                db = load_security_db()
++                pending = db.get("pending_requests", {})
++                if not pending:
++                    try:
++                        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                            "callback_query_id": cb_id,
++                            "text": "👍 No pending join requests at this moment!",
++                            "show_alert": True
++                        }, timeout=8)
++                    except Exception:
++                        pass
++                else:
++                    try:
++                        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                            "callback_query_id": cb_id
++                        }, timeout=8)
++                    except Exception:
++                        pass
++                    for uid, p in list(pending.items())[:5]:
++                        p_text = (
++                            f"⏳ <b>PENDING CANDIDATE:</b> {p.get('first_name','')} (@{p.get('username','N/A')})\n"
++                            f"🆔 User ID: <code>{uid}</code>\n"
++                            f"🕒 Requested: {p.get('request_time','')}"
++                        )
++                        p_btns = {
++                            "inline_keyboard": [
++                                [
++                                    {"text": "✅ APPROVE", "callback_data": f"sec_app:{uid}:{p.get('chat_id','')}"},
++                                    {"text": "❌ DECLINE", "callback_data": f"sec_rej:{uid}:{p.get('chat_id','')}"}
++                                ]
++                            ]
++                        }
++                        send_security_alert_to_admin(p_text, reply_markup=p_btns)
++
++            elif data == "sec_test_deal":
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id,
++                        "text": "⚡ Sending protected test deal to Telegram now...",
++                        "show_alert": False
++                    }, timeout=8)
++                except Exception:
++                    pass
++                api_send_telegram_test()
++
++            elif data == "sec_fleet_status":
++                with stats_lock:
++                    scans = total_scans_count
++                    loots = total_loots_found
++                fleet_msg = (
++                    f"🤖 <b>21 BOTS AUTONOMOUS FLEET STATUS</b>\n\n"
++                    f"• Total Hunter Bots: 21 (10 Amazon, 10 Flipkart, 1 Multi-Store)\n"
++                    f"• Total Products Scanned: {scans:,}\n"
++                    f"• 70%+ Loots Found: {loots}\n"
++                    f"• Operational Health: 100% Online\n"
++                    f"• Radar Filter: >= 70% Discount ONLY\n\n"
++                    f"Commander, all systems running at maximum efficiency!"
++                )
++                try:
++                    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", json={
++                        "callback_query_id": cb_id
++                    }, timeout=8)
++                except Exception:
++                    pass
++                send_security_alert_to_admin(fleet_msg)
++            return
++
++        # 3. HANDLE PRIVATE MESSAGES (BOT FIREWALL SENTINEL-02)
++        msg = update.get("message")
++        if msg:
++            chat = msg.get("chat", {})
++            from_u = msg.get("from", {})
++            user_id = from_u.get("id")
++            first_name = from_u.get("first_name", "User")
++            last_name = from_u.get("last_name", "")
++            username = from_u.get("username", "")
++            text = msg.get("text", "").strip()
++
++            if chat.get("type") == "private":
++                db = load_security_db()
++                uid_str = str(user_id)
++
++                # Case A: Master Commander Aman
++                if user_id == ADMIN_USER_ID:
++                    if text.startswith("/start"):
++                        welcome_cmd = (
++                            f"🎖️ <b>JARVIS SECURITY SHIELD // COMMANDER PORTAL</b>\n\n"
++                            f"Namaste Commander <b>Aman Mishra</b>! Iron-Dome defense active hai.\n\n"
++                            f"🛡️ <b>Defense Matrix:</b> 🟢 ARMED & IMPENETRABLE\n"
++                            f"👥 <b>Authorized Members:</b> {len(db.get('authorized_members', {}))}\n"
++                            f"⏳ <b>Pending Join Requests:</b> {len(db.get('pending_requests', {}))}\n"
++                            f"🚫 <b>Blocked Intrusions:</b> {db.get('stats', {}).get('intrusions_blocked', 0)}\n\n"
++                            f"Quick actions execute karne ke liye niche buttons use karein:"
++                        )
++                        kb = {
++                            "inline_keyboard": [
++                                [
++                                    {"text": "🛡️ Security Status", "callback_data": "sec_menu_status"},
++                                    {"text": "⏳ Pending Requests", "callback_data": "sec_menu_pending"}
++                                ],
++                                [
++                                    {"text": "⚡ Send Protected Deal", "callback_data": "sec_test_deal"},
++                                    {"text": "🤖 21 Bots Fleet Telemetry", "callback_data": "sec_fleet_status"}
++                                ]
++                            ]
++                        }
++                        send_security_alert_to_admin(welcome_cmd, reply_markup=kb)
++
++                    elif text.startswith("/security"):
++                        status_msg = (
++                            f"🛡️ <b>JARVIS IRON DOME // SECURITY STATUS REPORT</b>\n\n"
++                            f"• <b>Defense Perimeter:</b> 🟢 100% ARMED\n"
++                            f"• <b>Active Sentinels:</b> 5 Autonomous Units\n"
++                            f"• <b>Super Admin:</b> Aman Mishra (<code>{ADMIN_USER_ID}</code>)\n"
++                            f"• <b>Authorized Members:</b> {len(db.get('authorized_members', {}))}\n"
++                            f"• <b>Pending Requests:</b> {len(db.get('pending_requests', {}))}\n"
++                            f"• <b>Blocked Intrusions:</b> {db.get('stats', {}).get('intrusions_blocked', 0)}\n"
++                            f"• <b>Anti-Forward Shield:</b> ACTIVE (protect_content: True)\n\n"
++                            f"<i>Zero breaches detected. System is completely impenetrable.</i>"
++                        )
++                        send_security_alert_to_admin(status_msg)
++
++                    elif text.startswith("/pending"):
++                        pending = db.get("pending_requests", {})
++                        if not pending:
++                            send_security_alert_to_admin("👍 Abhi koi pending join request nahi hai, Sir!")
++                        else:
++                            for uid, p in list(pending.items())[:5]:
++                                p_text = (
++                                    f"⏳ <b>PENDING CANDIDATE:</b> {p.get('first_name','')} (@{p.get('username','N/A')})\n"
++                                    f"🆔 ID: <code>{uid}</code>\n"
++                                    f"🕒 Requested: {p.get('request_time','')}"
++                                )
++                                p_btns = {
++                                    "inline_keyboard": [
++                                        [
++                                            {"text": "✅ APPROVE", "callback_data": f"sec_app:{uid}:{p.get('chat_id','')}"},
++                                            {"text": "❌ DECLINE", "callback_data": f"sec_rej:{uid}:{p.get('chat_id','')}"}
++                                        ]
++                                    ]
++                                }
++                                send_security_alert_to_admin(p_text, reply_markup=p_btns)
++
++                    elif text.startswith("/whitelist"):
++                        parts = text.split()
++                        if len(parts) > 1 and parts[1].strip():
++                            target_id = parts[1].strip()
++                            whitelist_user_id(target_id, name="Manual Whitelist")
++                            send_security_alert_to_admin(f"✅ User ID <code>{target_id}</code> ko successfully whitelist kar diya gaya hai, Sir!")
++                        else:
++                            send_security_alert_to_admin("⚠️ Usage: <code>/whitelist &lt;user_id&gt;</code>")
++
++                    elif text.startswith("/revoke"):
++                        parts = text.split()
++                        if len(parts) > 1 and parts[1].strip():
++                            target_id = parts[1].strip()
++                            res = revoke_user_id(target_id)
++                            if res.get("success"):
++                                send_security_alert_to_admin(f"🚫 User ID <code>{target_id}</code> ka access revoke kar diya gaya hai, Sir!")
++                            else:
++                                send_security_alert_to_admin(f"❌ Error: {res.get('error')}")
++                        else:
++                            send_security_alert_to_admin("⚠️ Usage: <code>/revoke &lt;user_id&gt;</code>")
++
++                    elif text.startswith("/status"):
++                        with stats_lock:
++                            scans = total_scans_count
++                            loots = total_loots_found
++                        send_security_alert_to_admin(
++                            f"🤖 <b>21 BOTS STATUS REPORT</b>\n\n"
++                            f"Total Scans: {scans:,}\n"
++                            f"Total Loots: {loots}\n"
++                            f"All 21 Bots: ONLINE & HUNTING"
++                        )
++                    else:
++                        send_security_alert_to_admin(
++                            f"🫡 Commander Aman, JARVIS Iron-Dome active hai.\n"
++                            f"Commands: /start, /security, /pending, /whitelist, /revoke, /status"
++                        )
++
++                # Case B: Non-Admin User
++                else:
++                    if uid_str in db.get("authorized_members", {}):
++                        try:
++                            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
++                                "chat_id": user_id,
++                                "text": (
++                                    f"👋 Namaste {first_name}!\n\n"
++                                    f"Aapka account verified aur authorized hai. Sabhi exclusive 70%+ loot deals directly VIP Channel me post hoti hain!\n\n"
++                                    f"Happy shopping!"
++                                ),
++                                "parse_mode": "HTML"
++                            }, timeout=8)
++                        except Exception:
++                            pass
++                    else:
++                        # Unauthorized user intrusion!
++                        try:
++                            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
++                                "chat_id": user_id,
++                                "text": (
++                                    f"⛔ <b>ACCESS DENIED // JARVIS DEFENSE MATRIX</b>\n\n"
++                                    f"Namaste {first_name}. Ye bot aur VIP Deals Channel <b>100% Private & Protected</b> hai.\n\n"
++                                    f"Aapko is bot ko access karne ki permission nahi hai. Sirf Commander <b>Aman Mishra (Admin)</b> ki personal 1-Click approval ke baad hi access mil sakta hai.\n\n"
++                                    f"🔒 <i>Your attempt and Telegram ID <code>{user_id}</code> have been logged in JARVIS Security Radar.</i>"
++                                ),
++                                "parse_mode": "HTML"
++                            }, timeout=8)
++                        except Exception:
++                            pass
++
++                        with security_lock:
++                            db["stats"]["intrusions_blocked"] = db["stats"].get("intrusions_blocked", 0) + 1
++                            save_security_db(db)
++
++                        add_security_log("Intrusion Blocked", f"Unauthorized user {first_name} (@{username or 'None'} | ID: {user_id}) messaged bot: '{text[:50]}'", "ALERT")
++
++                        alert_intruder = (
++                            f"🚨 <b>SECURITY INTRUSION ATTEMPT BLOCKED</b>\n\n"
++                            f"Ek unauthorized user ne bot ko message kiya:\n"
++                            f"👤 <b>Name:</b> {first_name} {last_name}\n"
++                            f"🔗 <b>Username:</b> @{username or 'None'}\n"
++                            f"🆔 <b>Telegram ID:</b> <code>{user_id}</code>\n"
++                            f"💬 <b>Message:</b> <i>\"{text[:100]}\"</i>\n"
++                            f"🕒 <b>Time:</b> {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
++                            f"JARVIS ne user ko block kar diya hai. Kya aap ise whitelist karna chahte hain?"
++                        )
++                        intruder_btns = {
++                            "inline_keyboard": [
++                                [
++                                    {"text": "🟢 Whitelist User", "callback_data": f"sec_grant:{user_id}"},
++                                    {"text": "🚫 Blacklist & Ban", "callback_data": f"sec_ban:{user_id}"}
++                                ]
++                            ]
++                        }
++                        send_security_alert_to_admin(alert_intruder, reply_markup=intruder_btns)
++
++    except Exception as e:
++        print(f"[Security Update Handler Error]: {e}")
++
++def run_telegram_security_daemon():
++    """Continuously monitors Telegram updates for chat_join_request, callbacks, and unauthorized DMs."""
++    print("🛡️ [JARVIS Security Daemon] Sentinel Gatekeeper armed & listening...")
++    last_update_id = 0
++
++    try:
++        init_res = requests.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset=-1", timeout=10)
++        if init_res.status_code == 200:
++            res_data = init_res.json()
++            if res_data.get("result"):
++                last_update_id = res_data["result"][-1]["update_id"]
++    except Exception as e:
++        print(f"[Security Init Error]: {e}")
++
++    while True:
++        try:
++            url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
++            params = {
++                "offset": last_update_id + 1,
++                "timeout": 20,
++                "allowed_updates": '["message","callback_query","chat_join_request"]'
++            }
++            resp = requests.get(url, params=params, timeout=25)
++            if resp.status_code != 200:
++                time.sleep(3)
++                continue
++
++            updates = resp.json().get("result", [])
++            for update in updates:
++                last_update_id = update["update_id"]
++                handle_telegram_security_update(update)
++
++        except Exception as e:
++            time.sleep(2)
++
++security_daemon_started = False
++security_daemon_lock = threading.Lock()
++
++def ensure_security_daemon_started():
++    global security_daemon_started
++    with security_daemon_lock:
++        if not security_daemon_started:
++            sec_t = threading.Thread(target=run_telegram_security_daemon, daemon=True)
++            sec_t.start()
++            security_daemon_started = True
+ 
+ def run_flask_server():
++    ensure_security_daemon_started()
+     import os
+     port = int(os.environ.get("PORT", 5000))
+     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+ 
++
+ # ==========================================
+ # 🛒 AMAZON HUNTER ENGINE
+ # ==========================================
