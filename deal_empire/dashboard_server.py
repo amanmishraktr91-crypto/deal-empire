@@ -1,5 +1,5 @@
 """
-JARVIS COMMAND CENTER — Live 21-Bot Dashboard + AI Chat + Auto-Healing
+JARVIS COMMAND CENTER — Live 21-Bot Dashboard + AI Chat + Auto-Healing (Production Hardened)
 """
 import os
 import sys
@@ -10,6 +10,7 @@ import queue
 import logging
 import random
 import re
+import html
 from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, jsonify, Response, session
@@ -88,7 +89,6 @@ class LiveStore:
                 "last_check": datetime.now().isoformat(),
             }
         }
-        self._bot_threads = {}
         self._init_bots()
         self._start_healer()
 
@@ -100,12 +100,12 @@ class LiveStore:
                 "store": stores[i],
                 "scans": 0,
                 "loots": 0,
-                "status": "idle",       # idle | active | healing | error | dead
+                "status": "idle",       # idle | active | healing | error | dead | blocked
                 "last_beat": time.time(),
                 "heal_count": 0,
             }
 
-    # -------- Auto-healer thread --------
+    # -------- Auto-healer thread (PATCH 4: ignores blocked bots during cooldown) --------
     def _start_healer(self):
         t = threading.Thread(target=self._healer_loop, daemon=True)
         t.start()
@@ -117,26 +117,32 @@ class LiveStore:
                 now = time.time()
                 healed = 0
                 healthy = 0
+                to_revive = []
                 with self._lock:
                     for name, b in self.data["bot_status"].items():
+                        st = b.get("status")
+                        # blocked ya healing ko chhedna nahi (cooldown me hain)
+                        if st in ("healing", "blocked"):
+                            healthy += 1
+                            continue
                         gap = now - b.get("last_beat", now)
                         if gap > HEARTBEAT_TIMEOUT:
-                            # Dead — auto heal karo
                             b["status"] = "healing"
                             b["heal_count"] = b.get("heal_count", 0) + 1
                             b["last_beat"] = now
+                            self._log_heal_internal(name, f"No heartbeat {int(gap)}s -> restart")
+                            to_revive.append(name)
                             healed += 1
-                            self._log_heal_internal(name, f"No heartbeat for {int(gap)}s -> auto-restart")
-                            # Trigger actual bot restart hook
-                            self._restart_bot_worker(name)
                         else:
                             healthy += 1
                     self.data["doctor"]["healthy_bots"] = healthy
                     self.data["doctor"]["total_monitored_bots"] = len(self.data["bot_status"])
                     self.data["doctor"]["healing_actions_total"] += healed
                     self.data["doctor"]["last_check"] = datetime.now().isoformat()
+                for name in to_revive:
+                    start_bot_worker(name)
                 if healed:
-                    logger.info(f"[AutoHealer] Revived {healed} bots")
+                    logger.info(f"[AutoHealer] Revived {healed} bots cleanly via registry")
                     self._broadcast()
             except Exception as e:
                 logger.error(f"Healer error: {e}")
@@ -149,17 +155,8 @@ class LiveStore:
         self.data["heal_logs"] = self.data["heal_logs"][:20]
 
     def _restart_bot_worker(self, bot_name):
-        """Restarts the hunter bot in a fresh background daemon thread."""
         try:
-            if bot_name in HUNTER_TARGETS:
-                info = HUNTER_TARGETS[bot_name]
-                store = info["store"]
-                cat = info["cat"]
-                kw = info["kw"]
-                target_fn = run_amazon_hunter if store == "Amazon" else run_flipkart_hunter
-                t = threading.Thread(target=target_fn, args=(bot_name, cat, kw), daemon=True)
-                t.start()
-                self._bot_threads[bot_name] = t
+            start_bot_worker(bot_name)
         except Exception as e:
             logger.error(f"Failed to restart {bot_name}: {e}")
 
@@ -186,7 +183,6 @@ class LiveStore:
 
     def add_security(self, req):
         with self._lock:
-            # Prevent duplicate user ids in pending queue
             uid = req.get("user_id")
             if not any(r.get("user_id") == uid for r in self.data["security_pending"]):
                 self.data["security_pending"].append(req)
@@ -217,8 +213,7 @@ class LiveStore:
             self.data["doctor"]["healing_actions_total"] += 1
             self._broadcast()
             
-            # Trigger actual recovery thread
-            self._restart_bot_worker(bot_name)
+            start_bot_worker(bot_name)
             return True
 
     def snapshot(self):
@@ -280,7 +275,7 @@ store = LiveStore()
 # Hooks — bots call these
 # ============================================================
 def report_bot_scan(bot_name, store_name):
-    """Called after every scan cycle — also serves as heartbeat"""
+    """Called after every successful scan cycle — serves as heartbeat"""
     store.inc("total_scans", 1)
     cur = store.data["bot_status"].get(bot_name, {})
     store.update_bot(bot_name, store=store_name,
@@ -306,7 +301,7 @@ def report_security_request(uid, name, username, channel, chat_id=""):
     })
 
 def report_bot_error(bot_name, err_msg):
-    """When bot fails — auto-healer will detect and revive"""
+    """When bot encounters network error"""
     cur = store.data["bot_status"].get(bot_name, {})
     store.update_bot(bot_name, status="error", last_error=str(err_msg)[:80])
 
@@ -317,7 +312,6 @@ def api_key_required(f):
     @wraps(f)
     def w(*a, **kw):
         key = request.headers.get("X-Admin-Key", "").strip()
-        # Allow if matching key OR if session logged in
         if session.get("logged_in") or (ADMIN_API_KEY and key == ADMIN_API_KEY):
             return f(*a, **kw)
         return jsonify({"error": "Unauthorized"}), 401
@@ -486,51 +480,77 @@ def heal_all():
     return jsonify({"ok": True, "healed": healed})
 
 # ============================================================
-# 🛡️ TELEGRAM SENTINEL & DEALS SENDER
+# 🛡️ TELEGRAM SENTINEL & RETRY SENDER (PATCH 2)
 # ============================================================
+def tg_api(method, payload, retries=4):
+    """Safe Telegram API caller with rate-limit retry & backoff"""
+    if not BOT_TOKEN:
+        return None
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
+    for i in range(retries):
+        try:
+            r = cffi_requests.post(url, json=payload, timeout=15)
+            if r.status_code == 200:
+                return r.json()
+            if r.status_code == 429:
+                ra = 5
+                try:
+                    ra = r.json().get("parameters", {}).get("retry_after", 5)
+                except Exception:
+                    pass
+                logger.warning(f"TG rate-limit, waiting {ra}s")
+                time.sleep(ra + 1)
+                continue
+            logger.warning(f"TG {method} HTTP {r.status_code}: {r.text[:120]}")
+            return None
+        except Exception as e:
+            logger.warning(f"TG {method} error attempt {i+1}: {e}")
+            time.sleep(2 ** i)
+    return None
+
 def send_telegram_deal_alert(deal):
-    """Sends deal with Telegram protect_content (Anti-Forward / Anti-Copy)"""
+    """Sends deal with Telegram protect_content & HTML escape protection"""
+    raw_title = str(deal.get('title', 'Unknown'))
+    safe_title = html.escape(raw_title)
+    safe_mrp = html.escape(str(deal.get('mrp', 'N/A')))
+    safe_price = html.escape(str(deal.get('price', 'N/A')))
+    safe_disc = html.escape(str(deal.get('discount', 'N/A')))
+    safe_store = html.escape(str(deal.get('store', 'N/A')))
+    deal_url = str(deal.get('url', '#'))
+
     msg = (
-        f"🔥 <b>{deal.get('discount')} OFF Mega Loot Deal!</b> 🔥\n\n"
-        f"📦 <b>{deal.get('title')}</b>\n\n"
-        f"❌ <b>MRP:</b> {deal.get('mrp')}\n"
-        f"💰 <b>Deal Price:</b> {deal.get('price')}\n"
-        f"🏷️ <b>Store:</b> {deal.get('store')}\n\n"
-        f"⚡ <b>1-Click Buy Link:</b>\n"
-        f"{deal.get('url')}\n\n"
+        f"🔥 <b>{safe_disc} OFF Mega Loot Deal!</b> 🔥\n\n"
+        f"📦 <b>{safe_title}</b>\n\n"
+        f"❌ <b>MRP:</b> {safe_mrp}\n"
+        f"💰 <b>Deal Price:</b> {safe_price}\n"
+        f"🏷️ <b>Store:</b> {safe_store}\n\n"
+        f"⚡ <b>1-Click Buy Link:</b>\n{deal_url}\n\n"
         f"⚠️ <i>Price kabhi bhi badh sakti hai, jaldi check karein!</i>"
     )
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
+    tg_api("sendMessage", {
         "chat_id": CHAT_ID,
         "text": msg,
         "parse_mode": "HTML",
         "disable_web_page_preview": False,
         "protect_content": True
-    }
-    try:
-        cffi_requests.post(url, json=payload, timeout=12)
-    except Exception as e:
-        logger.error(f"Telegram Alert Error: {e}")
+    })
 
 def approve_telegram_user(user_id, chat_id=""):
     try:
         if chat_id:
-            cffi_requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/approveChatJoinRequest", 
-                              json={"chat_id": chat_id, "user_id": int(user_id)}, timeout=10)
-        cffi_requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
+            tg_api("approveChatJoinRequest", {"chat_id": chat_id, "user_id": int(user_id)})
+        tg_api("sendMessage", {
             "chat_id": int(user_id),
             "text": "🛡️ <b>JARVIS SECURITY PROTOCOL // ACCESS GRANTED</b>\n\nCommander Aman Mishra ne aapki request approve kar di hai!",
             "parse_mode": "HTML"
-        }, timeout=10)
+        })
     except Exception as e:
         logger.error(f"Approve TG Error: {e}")
 
 def decline_telegram_user(user_id, chat_id=""):
     try:
         if chat_id:
-            cffi_requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/declineChatJoinRequest", 
-                              json={"chat_id": chat_id, "user_id": int(user_id)}, timeout=10)
+            tg_api("declineChatJoinRequest", {"chat_id": chat_id, "user_id": int(user_id)})
     except Exception as e:
         logger.error(f"Decline TG Error: {e}")
 
@@ -539,6 +559,8 @@ def telegram_sentinel_daemon():
     last_update_id = 0
     while True:
         try:
+            if not BOT_TOKEN:
+                time.sleep(10); continue
             url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
             params = {
                 "offset": last_update_id + 1,
@@ -563,9 +585,9 @@ def telegram_sentinel_daemon():
                         # Interactive Telegram buttons to Admin
                         alert = (
                             f"🚨 <b>JARVIS IRON DOME // NEW JOIN REQUEST</b>\n\n"
-                            f"👤 <b>Candidate:</b> {fname} (@{uname or 'None'})\n"
+                            f"👤 <b>Candidate:</b> {html.escape(fname)} (@{html.escape(uname or 'None')})\n"
                             f"🆔 <b>ID:</b> <code>{uid}</code>\n"
-                            f"📢 <b>Channel:</b> {ctitle}\n\n"
+                            f"📢 <b>Channel:</b> {html.escape(ctitle)}\n\n"
                             f"<i>Commander Aman, kya ise admit karein?</i>"
                         )
                         btns = {
@@ -576,9 +598,9 @@ def telegram_sentinel_daemon():
                                 ]
                             ]
                         }
-                        cffi_requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
+                        tg_api("sendMessage", {
                             "chat_id": ADMIN_USER_ID, "text": alert, "parse_mode": "HTML", "reply_markup": btns
-                        }, timeout=10)
+                        })
 
                     elif "callback_query" in u:
                         cb = u["callback_query"]
@@ -591,21 +613,74 @@ def telegram_sentinel_daemon():
                                 cid = parts[2] if len(parts) > 2 else ""
                                 approve_telegram_user(uid, cid)
                                 store.resolve_security(uid, "approved")
-                                cffi_requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", 
-                                                  json={"callback_query_id": cb_id, "text": "✅ User Approved!"})
+                                tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": "✅ User Approved!"})
                             elif cb_data.startswith("sec_decl:"):
                                 parts = cb_data.split(":")
                                 uid = int(parts[1])
                                 cid = parts[2] if len(parts) > 2 else ""
                                 decline_telegram_user(uid, cid)
                                 store.resolve_security(uid, "declined")
-                                cffi_requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery", 
-                                                  json={"callback_query_id": cb_id, "text": "❌ User Declined!"})
+                                tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": "❌ User Declined!"})
+            elif resp.status_code == 409:
+                logger.warning("Telegram 409 conflict — another poller is active, backing off 10s")
+                time.sleep(10)
         except Exception as e:
-            time.sleep(2)
+            time.sleep(3)
+
+# ============================================================
+# 🚨 SILENCE WATCHDOG (PATCH 5: Alert if no loot in 1 hour)
+# ============================================================
+def silence_watchdog():
+    last_alert = 0
+    while True:
+        time.sleep(600)  # Check every 10 mins
+        try:
+            snap = store.snapshot()
+            last_loot_ts = 0
+            if snap["recent_loots"]:
+                try:
+                    last_loot_ts = datetime.fromisoformat(
+                        snap["recent_loots"][0].get("timestamp", "")
+                    ).timestamp()
+                except Exception:
+                    pass
+            ref = last_loot_ts or snap["uptime_start"]
+            silent_for = time.time() - ref
+
+            if silent_for > 3600 and (time.time() - last_alert) > 3600:
+                active = sum(1 for b in snap["bot_status"].values() if b.get("status") == "active")
+                blocked = sum(1 for b in snap["bot_status"].values() if b.get("status") == "blocked")
+                tg_api("sendMessage", {
+                    "chat_id": ADMIN_USER_ID,
+                    "text": (
+                        f"⚠️ <b>JARVIS WATCHDOG ALERT</b>\n\n"
+                        f"Pichle <b>{int(silent_for//60)} min</b> se koi naya loot nahi mila.\n"
+                        f"🟢 Active Bots: {active}\n"
+                        f"🟠 Blocked/Cooldown: {blocked}\n"
+                        f"🩺 Total Doctor Heals: {snap['doctor']['healing_actions_total']}\n\n"
+                        f"System check automated diagnostic running..."
+                    ),
+                    "parse_mode": "HTML"
+                })
+                last_alert = time.time()
+        except Exception as e:
+            logger.error(f"Watchdog err: {e}")
+
+# ============================================================
+# 🔄 SELF-PING WATCHDOG (Render Free Tier Anti-Sleep)
+# ============================================================
+def self_ping_watchdog():
+    """Pings internal stats endpoint every 9 minutes to avoid idle drops"""
+    time.sleep(30)
+    while True:
+        try:
+            cffi_requests.get("http://127.0.0.1:10000/api/stats", timeout=5)
+        except Exception:
+            pass
+        time.sleep(540)
 
 # ==========================================
-# 🛒 21 AUTONOMOUS HUNTER WORKERS
+# 🛒 21 AUTONOMOUS HUNTER WORKERS (PATCH 2, 3, 6)
 # ==========================================
 BLOCKED_WORDS = ["cover", "case", "tempered glass", "screen protector", "skin", "sticker", "pouch", "disposable", "tissue", "toothpick"]
 
@@ -619,9 +694,9 @@ def is_title_blocked(title):
             if re.search(r'\b' + re.escape(w) + r'\b', tl): return True
     return False
 
-# Bounded LRU Cache for Duplicate Deals
+# Bounded LRU Cache (PATCH 6: Expanded to 20,000 items)
 import collections
-MAX_SEEN = 3000
+MAX_SEEN = 20000
 seen_products = collections.OrderedDict()
 seen_lock = threading.Lock()
 
@@ -631,6 +706,80 @@ def is_seen(did):
         seen_products[did] = time.time()
         if len(seen_products) > MAX_SEEN: seen_products.popitem(last=False)
         return False
+
+# Anti-Block Fetcher with User-Agent & Exponential Backoff
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+]
+
+def fetch_page(url, retries=3):
+    """Returns (html, status). html=None if blocked/failed."""
+    last_status = 0
+    for i in range(retries):
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-IN,en;q=0.9,hi;q=0.8",
+            "Connection": "keep-alive",
+        }
+        try:
+            r = cffi_requests.get(
+                url, headers=headers, impersonate="chrome124",
+                timeout=25, allow_redirects=True
+            )
+            last_status = r.status_code
+            if r.status_code == 200:
+                low = r.text.lower()
+                if ("captcha" in low or "enter the characters" in low
+                        or "robot check" in low or "api-services-support@amazon.com" in low):
+                    logger.warning(f"[CAPTCHA detected] {url[:70]}")
+                    time.sleep(random.randint(30, 60))
+                    continue
+                return r.text, 200
+            if r.status_code in (429, 502, 503, 504):
+                wait = (2 ** i) * random.uniform(5, 10)
+                logger.info(f"[{r.status_code}] backoff {wait:.0f}s — {url[:60]}")
+                time.sleep(wait)
+                continue
+            return None, r.status_code
+        except Exception as e:
+            logger.warning(f"fetch err ({i+1}/{retries}): {e}")
+            time.sleep((2 ** i) * 2)
+    return None, last_status
+
+# ============================================================
+# WORKER REGISTRY (PATCH 1: Guaranteed 1 thread per bot)
+# ============================================================
+BOT_WORKERS = {}
+WORKER_LOCK = threading.Lock()
+
+def stop_bot_worker(name, timeout=3):
+    with WORKER_LOCK:
+        w = BOT_WORKERS.pop(name, None)
+    if not w:
+        return
+    w["stop"].set()
+    try:
+        w["thread"].join(timeout=timeout)
+    except Exception:
+        pass
+
+def start_bot_worker(name):
+    info = HUNTER_TARGETS.get(name)
+    if not info:
+        return
+    stop_bot_worker(name)  # Purana thread band karo pehle!
+    ev = threading.Event()
+    fn = run_amazon_hunter if info["store"] == "Amazon" else run_flipkart_hunter
+    t = threading.Thread(
+        target=fn, args=(name, info["cat"], info["kw"], ev), daemon=True
+    )
+    with WORKER_LOCK:
+        BOT_WORKERS[name] = {"thread": t, "stop": ev}
+    t.start()
 
 # 21 Targets Definition
 HUNTER_TARGETS = {
@@ -659,137 +808,223 @@ HUNTER_TARGETS = {
     "HUNTER-21": {"store": "Flipkart", "cat": "Fashion", "kw": "branded casual shirt cotton"}
 }
 
-def run_amazon_hunter(bot_name, cat, kw):
-    url = f"https://www.amazon.in/s?k={kw.replace(' ', '+')}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36"}
-    while True:
+def run_amazon_hunter(bot_name, cat, kw, stop_event=None):
+    base_kw = kw.replace(' ', '+')
+    SORT_VARIANTS = ["", "&s=review-rank", "&s=price-asc-rank", "&s=date-desc-rank"]
+    empty_streak = 0
+    blocked_until = 0
+    logger.info(f"[{bot_name}] Amazon hunter active ({cat})")
+
+    while not (stop_event and stop_event.is_set()):
         try:
+            if time.time() < blocked_until:
+                time.sleep(5)
+                continue
+
+            extra = random.choice(SORT_VARIANTS)
+            url = f"https://www.amazon.in/s?k={base_kw}{extra}"
+            html_text, status = fetch_page(url)
+
+            if html_text is None:
+                report_bot_error(bot_name, f"HTTP {status}")
+                store.update_bot(bot_name, status="blocked")
+                blocked_until = time.time() + random.randint(120, 300)
+                continue
+
+            # Heartbeat ONLY on successful fetch
             report_bot_scan(bot_name, "Amazon")
-            resp = cffi_requests.get(url, headers=headers, impersonate="chrome124", timeout=20)
-            if resp.status_code in [429, 503]:
-                time.sleep(random.randint(60, 90))
-                continue
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                items = soup.find_all('div', {'data-component-type': 's-search-result'})
-                for it in items:
-                    try:
-                        h2 = it.find('h2')
-                        if not h2: continue
-                        title = h2.text.strip()
-                        if is_title_blocked(title): continue
-                        
-                        pw = it.find('span', {'class': 'a-price-whole'})
-                        if not pw: continue
-                        p_str = re.sub(r'[^\d]', '', pw.text)
-                        if not p_str: continue
-                        price = int(p_str)
 
-                        mrp_el = it.find('span', {'class': 'a-price', 'data-a-strike': 'true'}) or it.find('span', {'class': 'a-text-price'})
-                        if not mrp_el: continue
-                        m_str = re.sub(r'[^\d]', '', mrp_el.text)
-                        if not m_str: continue
-                        mrp = int(m_str)
+            soup = BeautifulSoup(html_text, "html.parser")
+            items = soup.find_all('div', {'data-component-type': 's-search-result'})
 
-                        if mrp <= price or mrp < MIN_MRP: continue
-                        discount = int(round(((mrp - price) / mrp) * 100))
+            if not items:
+                empty_streak += 1
+                logger.info(f"[{bot_name}] 0 items on Amazon (streak={empty_streak})")
+                if empty_streak >= 3:
+                    blocked_until = time.time() + random.randint(180, 360)
+                    empty_streak = 0
+                    logger.warning(f"[{bot_name}] soft-block detected — cooldown 3-6 min")
+            else:
+                empty_streak = 0
 
-                        if discount >= MIN_DISCOUNT_PERCENT:
-                            link_el = it.find('a', {'class': 'a-link-normal s-no-outline'})
-                            if not link_el: continue
-                            url_p = "https://www.amazon.in" + link_el.get('href', '').split('?')[0]
-                            asin_m = re.search(r'/dp/([A-Z0-9]{10})', url_p)
-                            did = asin_m.group(1) if asin_m else title[:25]
-                            if is_seen(did): continue
+            for it in items:
+                if stop_event and stop_event.is_set():
+                    return
+                try:
+                    h2 = it.find('h2')
+                    if not h2: continue
+                    title = h2.text.strip()
+                    if is_title_blocked(title): continue
 
-                            loot = {
-                                "title": title, "price": f"₹{price:,}", "mrp": f"₹{mrp:,}",
-                                "discount": f"{discount}%", "url": url_p, "store": "Amazon"
-                            }
-                            report_loot(bot_name, loot)
-                            send_telegram_deal_alert(loot)
-                    except Exception:
-                        pass
+                    pw = it.find('span', {'class': 'a-price-whole'})
+                    if not pw: continue
+                    p_str = re.sub(r'[^\d]', '', pw.text)
+                    if not p_str: continue
+                    price = int(p_str)
+
+                    mrp_el = it.find('span', {'class': 'a-price', 'data-a-strike': 'true'}) or it.find('span', {'class': 'a-text-price'})
+                    if not mrp_el: continue
+                    off = mrp_el.find('span', class_='a-offscreen')
+                    m_str = re.sub(r'[^\d]', '', off.text if off else mrp_el.text)
+                    if not m_str: continue
+                    mrp = int(m_str)
+
+                    if mrp <= price or mrp < MIN_MRP: continue
+                    discount = int(round(((mrp - price) / mrp) * 100))
+                    if discount < MIN_DISCOUNT_PERCENT: continue
+
+                    link_el = it.find('a', {'class': 'a-link-normal s-no-outline'})
+                    if not link_el: continue
+                    url_p = "https://www.amazon.in" + link_el.get('href', '').split('?')[0]
+                    asin_m = re.search(r'/dp/([A-Z0-9]{10})', url_p)
+                    did = asin_m.group(1) if asin_m else title[:25]
+                    if is_seen(did): continue
+
+                    loot = {
+                        "title": title, "price": f"₹{price:,}", "mrp": f"₹{mrp:,}",
+                        "discount": f"{discount}%", "url": url_p, "store": "Amazon"
+                    }
+                    report_loot(bot_name, loot)
+                    send_telegram_deal_alert(loot)
+                except Exception:
+                    pass
+
         except Exception as e:
             report_bot_error(bot_name, e)
-        time.sleep(random.randint(25, 45))
+            logger.exception(f"{bot_name} loop err")
+            time.sleep(10)
 
-def run_flipkart_hunter(bot_name, cat, kw):
-    url = f"https://www.flipkart.com/search?q={kw.replace(' ', '%20')}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36"}
-    while True:
+        # Interruptible sleep
+        for _ in range(random.randint(25, 45)):
+            if stop_event and stop_event.is_set():
+                return
+            time.sleep(1)
+
+def run_flipkart_hunter(bot_name, cat, kw, stop_event=None):
+    base_kw = kw.replace(' ', '%20')
+    SORT_VARIANTS = ["", "&sort=popularity", "&sort=price_asc"]
+    empty_streak = 0
+    blocked_until = 0
+    logger.info(f"[{bot_name}] Flipkart hunter active ({cat})")
+
+    while not (stop_event and stop_event.is_set()):
         try:
-            report_bot_scan(bot_name, "Flipkart")
-            resp = cffi_requests.get(url, headers=headers, impersonate="chrome124", timeout=20)
-            if resp.status_code in [429, 503]:
-                time.sleep(random.randint(60, 90))
+            if time.time() < blocked_until:
+                time.sleep(5)
                 continue
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'html.parser')
-                cards = soup.find_all('div', class_=re.compile(r'tUxRFH|_1AtVbE|slAVV4'))
-                for c in cards:
-                    try:
-                        te = c.find('div', class_=re.compile(r'KzDlHZ|wjcEIp|_4rR01T|s1Q9rs')) or c.find('a', class_=re.compile(r'IRpwTa|WKTcLC'))
-                        if not te: continue
-                        title = te.text.strip()
-                        if is_title_blocked(title): continue
 
-                        pe = c.find('div', class_=re.compile(r'Nx9bqj|_30jeq3'))
-                        if not pe: continue
-                        p_str = re.sub(r'[^\d]', '', pe.text)
-                        if not p_str: continue
-                        price = int(p_str)
+            extra = random.choice(SORT_VARIANTS)
+            url = f"https://www.flipkart.com/search?q={base_kw}{extra}"
+            html_text, status = fetch_page(url)
 
-                        me = c.find('div', class_=re.compile(r'yRaY8j|_3I9_wc'))
-                        if not me: continue
-                        m_str = re.sub(r'[^\d]', '', me.text)
-                        if not m_str: continue
-                        mrp = int(m_str)
+            if html_text is None:
+                report_bot_error(bot_name, f"HTTP {status}")
+                store.update_bot(bot_name, status="blocked")
+                blocked_until = time.time() + random.randint(120, 300)
+                continue
 
-                        if mrp <= price or mrp < MIN_MRP: continue
-                        discount = int(round(((mrp - price) / mrp) * 100))
+            report_bot_scan(bot_name, "Flipkart")
 
-                        if discount >= MIN_DISCOUNT_PERCENT:
-                            le = c.find('a', href=True)
-                            if not le: continue
-                            raw_href = le['href']
-                            url_p = f"https://www.flipkart.com{raw_href.split('?')[0]}"
-                            did = raw_href.split('/p/')[1].split('?')[0] if '/p/' in raw_href else title[:25]
-                            if is_seen(did): continue
+            soup = BeautifulSoup(html_text, "html.parser")
+            # Modern + Legacy Flipkart class selectors
+            cards = soup.find_all('div', class_=re.compile(r'tUxRFH|_1AtVbE|slAVV4|cPHDOP|_75nlfW|RGLWAk|row'))
 
-                            loot = {
-                                "title": title, "price": f"₹{price:,}", "mrp": f"₹{mrp:,}",
-                                "discount": f"{discount}%", "url": url_p, "store": "Flipkart"
-                            }
-                            report_loot(bot_name, loot)
-                            send_telegram_deal_alert(loot)
-                    except Exception:
-                        pass
+            if not cards:
+                empty_streak += 1
+                logger.info(f"[{bot_name}] 0 cards on Flipkart (streak={empty_streak})")
+                if empty_streak >= 3:
+                    blocked_until = time.time() + random.randint(180, 360)
+                    empty_streak = 0
+            else:
+                empty_streak = 0
+
+            for c in cards:
+                if stop_event and stop_event.is_set():
+                    return
+                try:
+                    te = c.find('div', class_=re.compile(r'KzDlHZ|wjcEIp|_4rR01T|s1Q9rs')) or c.find('a', class_=re.compile(r'IRpwTa|WKTcLC'))
+                    if not te: continue
+                    title = te.text.strip()
+                    if is_title_blocked(title): continue
+
+                    pe = c.find('div', class_=re.compile(r'Nx9bqj|_30jeq3'))
+                    if not pe: continue
+                    p_str = re.sub(r'[^\d]', '', pe.text)
+                    if not p_str: continue
+                    price = int(p_str)
+
+                    me = c.find('div', class_=re.compile(r'yRaY8j|_3I9_wc'))
+                    if not me: continue
+                    m_str = re.sub(r'[^\d]', '', me.text)
+                    if not m_str: continue
+                    mrp = int(m_str)
+
+                    if mrp <= price or mrp < MIN_MRP: continue
+                    discount = int(round(((mrp - price) / mrp) * 100))
+                    if discount < MIN_DISCOUNT_PERCENT: continue
+
+                    le = c.find('a', href=True)
+                    if not le: continue
+                    raw_href = le['href']
+                    url_p = f"https://www.flipkart.com{raw_href.split('?')[0]}"
+                    did = raw_href.split('/p/')[1].split('?')[0] if '/p/' in raw_href else title[:25]
+                    if is_seen(did): continue
+
+                    loot = {
+                        "title": title, "price": f"₹{price:,}", "mrp": f"₹{mrp:,}",
+                        "discount": f"{discount}%", "url": url_p, "store": "Flipkart"
+                    }
+                    report_loot(bot_name, loot)
+                    send_telegram_deal_alert(loot)
+                except Exception:
+                    pass
+
         except Exception as e:
             report_bot_error(bot_name, e)
-        time.sleep(random.randint(25, 45))
+            logger.exception(f"{bot_name} loop err")
+            time.sleep(10)
+
+        for _ in range(random.randint(25, 45)):
+            if stop_event and stop_event.is_set():
+                return
+            time.sleep(1)
 
 def start_fleet_and_sentinel():
-    """Starts Telegram Sentinel and 21 Autonomous Hunter Bots in background threads."""
+    """Starts Telegram Sentinel and 21 Autonomous Hunter Bots via Worker Registry"""
     logger.info("🚀 Starting Telegram Sentinel Daemon...")
-    t_sec = threading.Thread(target=telegram_sentinel_daemon, daemon=True)
-    t_sec.start()
+    threading.Thread(target=telegram_sentinel_daemon, daemon=True).start()
 
-    logger.info("🚀 Launching 21 Autonomous Hunter Bots...")
-    for bot_name, info in HUNTER_TARGETS.items():
-        store = info["store"]
-        cat = info["cat"]
-        kw = info["kw"]
-        target_fn = run_amazon_hunter if store == "Amazon" else run_flipkart_hunter
-        t = threading.Thread(target=target_fn, args=(bot_name, cat, kw), daemon=True)
-        t.start()
-        store_obj = store
+    logger.info("🚀 Starting Silence Watchdog Daemon...")
+    threading.Thread(target=silence_watchdog, daemon=True).start()
+
+    logger.info("🚀 Starting Internal Self-Ping Keep-Alive...")
+    threading.Thread(target=self_ping_watchdog, daemon=True).start()
+
+    logger.info("🚀 Launching 21 Autonomous Hunter Bots cleanly...")
+    for bot_name in HUNTER_TARGETS.keys():
+        start_bot_worker(bot_name)
         time.sleep(0.3)
-    logger.info("✅ All 21 Autonomous Bots are hunting in parallel!")
+    logger.info("✅ All 21 Autonomous Bots are hunting in parallel without duplicates!")
 
-# Auto-start engines once on app load
+# Auto-start engines once on app load with Cross-Platform Lock
 _engine_started = False
 _engine_lock = threading.Lock()
+
+def _acquire_engine_lock():
+    """Ensures only 1 master process runs bot workers (handles multi-worker gunicorn)."""
+    try:
+        import fcntl
+        import atexit
+        f = open("/tmp/jarvis_engine.lock", "w")
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        atexit.register(lambda: f.close())
+        return f
+    except (ImportError, ModuleNotFoundError):
+        # On Windows development
+        return True
+    except Exception as e:
+        logger.warning(f"Engine lock not acquired: {e}")
+        return None
 
 def ensure_engines_started():
     global _engine_started
@@ -798,9 +1033,13 @@ def ensure_engines_started():
             _engine_started = True
             threading.Thread(target=start_fleet_and_sentinel, daemon=True).start()
 
-ensure_engines_started()
+_engine_lock_fd = _acquire_engine_lock()
+if _engine_lock_fd:
+    ensure_engines_started()
+else:
+    logger.warning("Another worker owns engines — this process serves HTTP only.")
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.getenv("PORT", 10000))
     logger.info(f"🌐 [JARVIS DASHBOARD] Starting on http://0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
