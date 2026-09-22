@@ -515,15 +515,25 @@ def heal_all():
     return jsonify({"ok": True, "healed": healed})
 
 # ============================================================
-# ðŸ›¡ï¸ TELEGRAM SENTINEL & SAFE RETRY API
+# ðŸ›¡ï¸ TELEGRAM SENTINEL & SAFE RETRY API (UTF-8 Emoji Safe)
 # ============================================================
 def tg_api(method, payload, retries=4):
+    """Telegram API â€” UTF-8 safe, emoji-safe, retry-safe."""
     if not BOT_TOKEN:
         return None
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
     for i in range(retries):
         try:
-            r = cffi_requests.post(url, json=payload, timeout=15)
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            r = cffi_requests.post(
+                url,
+                data=body,
+                headers={
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Accept": "application/json",
+                },
+                timeout=15,
+            )
             if r.status_code == 200:
                 return r.json()
             if r.status_code == 429:
@@ -535,47 +545,207 @@ def tg_api(method, payload, retries=4):
                 logger.warning(f"TG rate-limit, waiting {ra}s")
                 time.sleep(ra + 1)
                 continue
-            logger.warning(f"TG {method} HTTP {r.status_code}: {r.text[:120]}")
+            logger.warning(f"TG {method} HTTP {r.status_code}: {r.text[:150]}")
             return None
         except Exception as e:
             logger.warning(f"TG {method} err attempt {i+1}: {e}")
             time.sleep(2 ** i)
     return None
 
-def send_telegram_deal_alert(deal):
-    """Sends deal with Telegram protect_content and HTML escape protection"""
-    raw_title = str(deal.get('title', 'Unknown'))
-    safe_title = html.escape(raw_title)
-    safe_mrp = html.escape(str(deal.get('mrp', 'N/A')))
-    safe_price = html.escape(str(deal.get('price', 'N/A')))
-    safe_disc = html.escape(str(deal.get('discount', 'N/A')))
-    safe_store = html.escape(str(deal.get('store', 'N/A')))
-    deal_url = str(deal.get('url', '#'))
+# ============================================================
+# ðŸ›¡ï¸ STRICT AMAZON PRICE EXTRACTOR & 10-POINT DEAL SHIELD
+# ============================================================
+def extract_amazon_prices_strict(soup):
+    """
+    ONLY from Amazon's core price widgets.
+    Returns (price, mrp) or (None, None).
+    Rejects anything outside these containers.
+    """
+    price = None
+    mrp = None
 
-    # Siren header for price glitches (80%+ or extreme drop)
-    is_glitch = "GLITCH" in safe_store.upper() or "GLITCH" in safe_title.upper() or int(re.sub(r'[^\d]', '', safe_disc) or 0) >= 80
+    TRUSTED_CONTAINERS = [
+        "#corePriceDisplay_desktop_feature_div",
+        "#corePrice_feature_div",
+        "#apex_desktop",
+        "#price",
+        "#tp_price_block_total_price_ww",
+    ]
+
+    trusted = None
+    for sel in TRUSTED_CONTAINERS:
+        node = soup.select_one(sel)
+        if node:
+            trusted = node
+            break
+
+    if trusted is None:
+        return None, None
+
+    # --- Current Price ---
+    for psel in [
+        "span.a-price:not(.a-text-price) span.a-price-whole",
+        "span.priceToPay span.a-offscreen",
+        "span.a-price span.a-offscreen",
+    ]:
+        el = trusted.select_one(psel)
+        if el:
+            txt = re.sub(r'[^\d]', '', el.get_text())
+            if txt and 50 <= int(txt) <= 1000000:
+                price = int(txt)
+                break
+
+    # --- MRP (strikethrough) ---
+    for msel in [
+        "span.a-price.a-text-price[data-a-strike='true'] span.a-offscreen",
+        "span.a-text-price span.a-offscreen",
+        "span.basisPrice span.a-offscreen",
+    ]:
+        el = trusted.select_one(msel)
+        if el:
+            txt = re.sub(r'[^\d]', '', el.get_text())
+            if txt and 100 <= int(txt) <= 1000000:
+                mrp = int(txt)
+                break
+
+    return price, mrp
+
+CATEGORY_CAPS = {
+    "earbuds":    {"max_mrp": 30000,  "kw": ["earbud", "tws", "buds", "airdopes", "airpods pro"]},
+    "headphones": {"max_mrp": 80000,  "kw": ["headphone", "headset", "wh-1000", "airpods max", "over ear"]},
+    "smartwatch": {"max_mrp": 200000, "kw": ["smartwatch", "smart watch", "apple watch"]},
+    "phone":      {"max_mrp": 350000, "kw": ["smartphone", "iphone", "galaxy s", "oneplus", "redmi", "realme", "pixel"]},
+    "laptop":     {"max_mrp": 600000, "kw": ["laptop", "macbook", "notebook", "rog", "thinkpad", "vivobook"]},
+    "tv":         {"max_mrp": 800000, "kw": ["smart tv", "led tv", "television", "oled", "qled"]},
+    "console":    {"max_mrp": 100000, "kw": ["playstation", "ps5", "xbox", "nintendo switch"]},
+    "tablet":     {"max_mrp": 250000, "kw": ["tablet", "ipad"]},
+    "camera":     {"max_mrp": 500000, "kw": ["camera", "dslr", "mirrorless", "gopro"]},
+    "speaker":    {"max_mrp": 100000, "kw": ["speaker", "soundbar", "party box"]},
+    "default":    {"max_mrp": 200000, "kw": []},
+}
+
+def _detect_cat(title):
+    tl = title.lower()
+    for cat, info in CATEGORY_CAPS.items():
+        if cat == "default":
+            continue
+        for kw in info["kw"]:
+            if kw in tl:
+                return cat, info["max_mrp"]
+    return "default", CATEGORY_CAPS["default"]["max_mrp"]
+
+def deal_shield(title, price, mrp, store, allow_glitch=False):
+    """
+    ðŸ›¡ï¸ 10-Point Shield. Returns (ok: bool, reason: str, discount: int).
+    Agar koi bhi check fail â†’ deal BAND.
+    """
+    # 1. Title
+    if not title or len(title.strip()) < 15:
+        return False, "S1:title_too_short", 0
+
+    # 2. Types
+    if not isinstance(price, int) or not isinstance(mrp, int):
+        return False, "S2:bad_type", 0
+
+    # 3. Price minimum
+    if price < 99:
+        return False, f"S3:price_too_low(â‚¹{price})", 0
+
+    # 4. MRP minimum
+    if mrp < 199:
+        return False, f"S4:mrp_too_low(â‚¹{mrp})", 0
+
+    # 5. MRP > Price
+    if mrp <= price:
+        return False, f"S5:mrp_le_price({mrp}<={price})", 0
+
+    # 6. Category cap
+    cat, cap = _detect_cat(title)
+    if mrp > cap:
+        return False, f"S6:mrp_over_cap({cat}:â‚¹{mrp}>â‚¹{cap})", 0
+    if price > cap:
+        return False, f"S6:price_over_cap({cat}:â‚¹{price})", 0
+
+    # 7. Discount range
+    discount = int(round(((mrp - price) / mrp) * 100))
+    if discount < 50:
+        return False, f"S7:discount_low({discount}%)", discount
+    if discount > 97:
+        return False, f"S7:discount_too_high({discount}%)", discount
+
+    # 8. Ratio
+    ratio = mrp / price
+    if ratio > 40:
+        return False, f"S8:ratio_extreme({ratio:.1f}x)", discount
+
+    # 9. Absolute amount sanity
+    savings = mrp - price
+    if savings > 500000:
+        return False, f"S9:savings_absurd(â‚¹{savings})", discount
+
+    # 10. GLITCH gate
+    if discount >= 85 and not allow_glitch:
+        return False, f"S10:glitch_blocked({discount}%)", discount
+
+    # 11. MRP > 3*price for glitch
+    if allow_glitch and discount >= 85:
+        if mrp < price * 3:
+            return False, f"S11:glitch_mrp_too_low({mrp}/{price})", discount
+
+    return True, f"PASS({discount}%, {cat})", discount
+
+def send_telegram_deal_alert(deal):
+    """Telegram send â€” SHIELD + encoding safe."""
+    title = deal.get("title", "")
+    price_str = deal.get("price", "0")
+    mrp_str = deal.get("mrp", "0")
+
+    # Numeric nikaalo
+    price = int(re.sub(r'[^\d]', '', str(price_str)) or 0)
+    mrp = int(re.sub(r'[^\d]', '', str(mrp_str)) or 0)
+
+    # Aggregator fallback for MRP if only discount was available
+    disc_num = int(re.sub(r'[^\d]', '', str(deal.get("discount", "0"))) or 0)
+    if mrp <= price and disc_num >= 50 and price > 0:
+        mrp = int(round(price / (1.0 - (disc_num / 100.0))))
+
+    # ðŸ›¡ï¸ SHIELD CHECK
+    is_glitch = "GLITCH" in title.upper() or "GLITCH" in deal.get("store", "").upper()
+    ok, reason, discount = deal_shield(title, price, mrp, deal.get("store", ""), allow_glitch=is_glitch)
+
+    if not ok:
+        logger.warning(f"ðŸ›¡ï¸ BLOCKED: {reason} | {title[:60]} | â‚¹{price}/â‚¹{mrp}")
+        return False
+
+    # Naya discount use karo (shield ka computed)
+    deal["discount"] = f"{discount}%"
+
+    safe_title = html.escape(title[:150])
+    safe_store = html.escape(deal.get('store', 'N/A'))
 
     if is_glitch:
-        header = "ðŸš¨ðŸš¨ <b>MEGA PRICE GLITCH / LOOT ALERT!</b> ðŸš¨ðŸš¨\nâš¡ <i>Price Error Deal â€” Hurry! Only for 2-5 Mins!</i> âš¡"
+        header = f"ðŸš¨ðŸš¨ <b>MEGA PRICE GLITCH / LOOT ALERT! ({discount}% OFF)</b> ðŸš¨ðŸš¨\nâš¡ <i>Price Error Deal â€” Hurry! Only for 2-5 Mins!</i> âš¡"
     else:
-        header = f"ðŸ”¥ <b>{safe_disc} OFF Mega Deal!</b> ðŸ”¥"
+        header = f"ðŸ”¥ <b>{discount}% OFF Mega Deal!</b> ðŸ”¥"
 
     msg = (
         f"{header}\n\n"
         f"ðŸ“¦ <b>{safe_title}</b>\n\n"
-        f"âŒ <b>MRP:</b> {safe_mrp}\n"
-        f"ðŸ’° <b>Deal Price:</b> {safe_price}\n"
-        f"ðŸ·ï¸ <b>Store / Source:</b> {safe_store}\n\n"
-        f"âš¡ <b>1-Click Buy Link:</b>\n{deal_url}\n\n"
+        f"âŒ <b>MRP:</b> â‚¹{mrp:,}\n"
+        f"ðŸ’° <b>Deal Price:</b> â‚¹{price:,}\n"
+        f"ðŸ·ï¸ <b>Store:</b> {safe_store}\n\n"
+        f"âš¡ <b>1-Click Buy Link:</b>\n{deal.get('url', '#')}\n\n"
         f"âš ï¸ <i>Price kabhi bhi badh sakti hai, jaldi check karein!</i>"
     )
-    tg_api("sendMessage", {
+
+    result = tg_api("sendMessage", {
         "chat_id": CHAT_ID,
         "text": msg,
         "parse_mode": "HTML",
         "disable_web_page_preview": False,
-        "protect_content": True
+        "protect_content": True,
     })
+    return result is not None
 
 def approve_telegram_user(user_id, chat_id=""):
     try:
@@ -1003,67 +1173,51 @@ def run_asin_watcher(bot_name, asin_list, stop_event=None):
                 title_el = soup.find("span", {"id": "productTitle"}) or soup.find("h1", {"id": "title"})
                 title = title_el.get_text(strip=True) if title_el else asin
 
-                # Current Price
-                price = None
-                for psel in [
-                    soup.find("span", {"class": "a-price-whole"}),
-                    soup.find("span", {"class": "priceToPay"}),
-                    soup.find("span", {"id": "priceblock_ourprice"}),
-                ]:
-                    if psel:
-                        txt = re.sub(r'[^\d]', '', psel.get_text())
-                        if txt:
-                            price = int(txt)
-                            break
-
-                if not price:
+                # Pehli reading via strict extractor
+                price, mrp = extract_amazon_prices_strict(soup)
+                if not price or not mrp or mrp <= price:
                     continue
 
-                # MRP (using a-offscreen to avoid double text bug)
-                mrp = None
-                mrp_el = soup.find("span", {"class": "a-price a-text-price"}) or soup.find("span", {"class": "basisPrice"})
-                if mrp_el:
-                    off = mrp_el.find("span", class_="a-offscreen")
-                    txt = re.sub(r'[^\d]', '', off.text if off else mrp_el.text)
-                    if txt:
-                        mrp = int(txt)
-
-                if not mrp or mrp <= price:
+                # ðŸ”’ VERIFY: 3 sec baad dobara fetch karo (double-check verification)
+                time.sleep(random.uniform(2.5, 4.5))
+                html2, _ = fetch_page(url, retries=1)
+                if not html2:
                     continue
 
-                discount = int(round(((mrp - price) / mrp) * 100))
+                soup2 = BeautifulSoup(html2, "html.parser")
+                price2, mrp2 = extract_amazon_prices_strict(soup2)
+                if not price2 or not mrp2:
+                    continue
 
-                # ðŸ”¥ GLITCH DETECTION: 80%+ discount OR high ticket item under 2000
-                is_glitch = (discount >= 80) or (mrp >= 15000 and price <= 1999) or (mrp >= 5000 and price <= 499)
+                # Price consistency check
+                price_diff_pct = abs(price2 - price) / price * 100
+                if price_diff_pct > 3:  # 3% se zyada antar = unreliable
+                    logger.info(f"[{bot_name}] {asin} price fluctuated ({price}â†’{price2}) â€” skip")
+                    continue
 
-                if is_glitch:
-                    did = f"glitch:{asin}:{price}"
-                    if is_seen(did): continue
-                    loot = {
-                        "title": f"ðŸš¨ GLITCH: {title[:120]}",
-                        "price": f"â‚¹{price:,}",
-                        "mrp": f"â‚¹{mrp:,}",
-                        "discount": f"{discount}%",
-                        "url": url,
-                        "store": "AMAZON-GLITCH",
-                    }
-                    report_loot(bot_name, loot)
-                    send_telegram_deal_alert(loot)
-                    logger.warning(f"ðŸš¨ [GLITCH ALERT] {asin} at â‚¹{price} (MRP â‚¹{mrp})")
+                # Final values
+                price, mrp = price2, mrp2
 
-                elif discount >= MIN_DISCOUNT_PERCENT:
-                    did = f"asin:{asin}:{price}"
-                    if is_seen(did): continue
-                    loot = {
-                        "title": title[:140],
-                        "price": f"â‚¹{price:,}",
-                        "mrp": f"â‚¹{mrp:,}",
-                        "discount": f"{discount}%",
-                        "url": url,
-                        "store": "AMAZON-WATCH",
-                    }
-                    report_loot(bot_name, loot)
-                    send_telegram_deal_alert(loot)
+                # ðŸ›¡ï¸ SHIELD CHECK
+                ok, reason, discount = deal_shield(title, price, mrp, "Amazon", allow_glitch=True)
+                if not ok:
+                    logger.info(f"[{bot_name}] ðŸ›¡ï¸ BLOCKED {asin}: {reason}")
+                    continue
+
+                did = f"asin:{asin}:{price}"
+                if is_seen(did):
+                    continue
+
+                loot = {
+                    "title": f"ðŸš¨ GLITCH: {title[:120]}" if discount >= 85 else title[:150],
+                    "price": f"â‚¹{price:,}",
+                    "mrp": f"â‚¹{mrp:,}",
+                    "discount": f"{discount}%",
+                    "url": url,
+                    "store": "AMAZON-GLITCH" if discount >= 85 else "AMAZON-WATCH",
+                }
+                report_loot(bot_name, loot)
+                send_telegram_deal_alert(loot)
 
             except Exception as e:
                 logger.warning(f"[{bot_name}] ASIN {asin} err: {e}")
@@ -1144,6 +1298,16 @@ def run_amazon_hunter(bot_name, cat, kw, stop_event=None):
                     asin_m = re.search(r'/dp/([A-Z0-9]{10})', url_p)
                     did = asin_m.group(1) if asin_m else title[:25]
                     if is_seen(did): continue
+
+                    # Search hunter me â€” sirf normal deals, glitch BAND
+                    if discount >= 85:
+                        logger.info(f"[{bot_name}] Search se 85%+ blocked: {title[:50]} ({discount}%)")
+                        continue
+
+                    ok, reason, _ = deal_shield(title, price, mrp, "Amazon", allow_glitch=False)
+                    if not ok:
+                        logger.info(f"[{bot_name}] SHIELD reject: {reason}")
+                        continue
 
                     loot = {
                         "title": title, "price": f"â‚¹{price:,}", "mrp": f"â‚¹{mrp:,}",
@@ -1226,6 +1390,16 @@ def run_flipkart_hunter(bot_name, cat, kw, stop_event=None):
                     url_p = f"https://www.flipkart.com{raw_href.split('?')[0]}"
                     did = raw_href.split('/p/')[1].split('?')[0] if '/p/' in raw_href else title[:25]
                     if is_seen(did): continue
+
+                    # Search hunter me â€” sirf normal deals, glitch BAND
+                    if discount >= 85:
+                        logger.info(f"[{bot_name}] Search se 85%+ blocked: {title[:50]} ({discount}%)")
+                        continue
+
+                    ok, reason, _ = deal_shield(title, price, mrp, "Flipkart", allow_glitch=False)
+                    if not ok:
+                        logger.info(f"[{bot_name}] SHIELD reject: {reason}")
+                        continue
 
                     loot = {
                         "title": title, "price": f"â‚¹{price:,}", "mrp": f"â‚¹{mrp:,}",
