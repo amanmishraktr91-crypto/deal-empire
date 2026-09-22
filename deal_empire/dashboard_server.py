@@ -1,5 +1,8 @@
 """
-JARVIS COMMAND CENTER — Live 21-Bot Dashboard + AI Chat + Auto-Healing (Production Hardened)
+JARVIS COMMAND CENTER — 3-Tier Ultimate Glitch & Loot Empire (Production Hardened)
+- Team A (5 Bots): Aggregator Snipers (Desidime, IndiaFreeStuff, FreeKaaMaal)
+- Team B (10 Bots): Direct High-Value ASIN Watchers (iPhone, PS5, MacBooks, TVs)
+- Team C (6 Bots): Category Clearance Search Hunters (Amazon & Flipkart)
 """
 import os
 import sys
@@ -16,7 +19,7 @@ from functools import wraps
 from flask import Flask, render_template, request, jsonify, Response, session
 from dotenv import load_dotenv
 
-# Ensure line buffering for cloud streaming logs
+# Line buffering for cloud logging
 if hasattr(sys.stdout, 'reconfigure'):
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
@@ -45,12 +48,12 @@ CHAT_ID = os.getenv("CHAT_ID", "6208434509").strip()
 MIN_DISCOUNT_PERCENT = int(os.getenv("MIN_DISCOUNT", "60"))
 MIN_MRP = int(os.getenv("MIN_MRP", "400"))
 
-# Import scraping dependencies
+# Scraping dependencies
 from curl_cffi import requests as cffi_requests
 from bs4 import BeautifulSoup
 
 # ============================================================
-# Gemini client (lazy)
+# Gemini AI client (lazy)
 # ============================================================
 _gemini = None
 def get_gemini():
@@ -66,8 +69,8 @@ def get_gemini():
 # ============================================================
 # Live Store (thread-safe)
 # ============================================================
-HEARTBEAT_TIMEOUT = 60   # 60 sec tak heartbeat na aaye = dead
-AUTO_HEAL_CHECK   = 15   # Har 15 sec check karo
+HEARTBEAT_TIMEOUT = 90   # 90s grace period
+AUTO_HEAL_CHECK   = 20   # Check every 20s
 
 class LiveStore:
     def __init__(self):
@@ -93,19 +96,22 @@ class LiveStore:
         self._start_healer()
 
     def _init_bots(self):
-        stores = ["Amazon"] * 11 + ["Flipkart"] * 10
+        stores_label = (
+            ["Desidime", "Desidime", "IndiaFreeStuff", "IndiaFreeStuff", "FreeKaaMaal"] +
+            ["Amazon-ASIN"] * 10 +
+            ["Amazon", "Amazon", "Amazon", "Flipkart", "Flipkart", "Flipkart"]
+        )
         for i in range(21):
             name = f"HUNTER-{i+1:02d}"
             self.data["bot_status"][name] = {
-                "store": stores[i],
+                "store": stores_label[i],
                 "scans": 0,
                 "loots": 0,
-                "status": "idle",       # idle | active | healing | error | dead | blocked
+                "status": "idle",
                 "last_beat": time.time(),
                 "heal_count": 0,
             }
 
-    # -------- Auto-healer thread (PATCH 4: ignores blocked bots during cooldown) --------
     def _start_healer(self):
         t = threading.Thread(target=self._healer_loop, daemon=True)
         t.start()
@@ -121,7 +127,6 @@ class LiveStore:
                 with self._lock:
                     for name, b in self.data["bot_status"].items():
                         st = b.get("status")
-                        # blocked ya healing ko chhedna nahi (cooldown me hain)
                         if st in ("healing", "blocked"):
                             healthy += 1
                             continue
@@ -142,7 +147,7 @@ class LiveStore:
                 for name in to_revive:
                     start_bot_worker(name)
                 if healed:
-                    logger.info(f"[AutoHealer] Revived {healed} bots cleanly via registry")
+                    logger.info(f"[AutoHealer] Revived {healed} bots via registry")
                     self._broadcast()
             except Exception as e:
                 logger.error(f"Healer error: {e}")
@@ -160,7 +165,6 @@ class LiveStore:
         except Exception as e:
             logger.error(f"Failed to restart {bot_name}: {e}")
 
-    # -------- Public methods --------
     def update_bot(self, name, **kw):
         with self._lock:
             if name in self.data["bot_status"]:
@@ -201,7 +205,6 @@ class LiveStore:
             self._broadcast()
 
     def manual_heal(self, bot_name):
-        """Manual 'Fix' button from dashboard"""
         with self._lock:
             if bot_name not in self.data["bot_status"]:
                 return False
@@ -212,7 +215,6 @@ class LiveStore:
             self._log_heal_internal(bot_name, "Manual fix from dashboard")
             self.data["doctor"]["healing_actions_total"] += 1
             self._broadcast()
-            
             start_bot_worker(bot_name)
             return True
 
@@ -272,10 +274,9 @@ class LiveStore:
 store = LiveStore()
 
 # ============================================================
-# Hooks — bots call these
+# Telemetry hooks
 # ============================================================
 def report_bot_scan(bot_name, store_name):
-    """Called after every successful scan cycle — serves as heartbeat"""
     store.inc("total_scans", 1)
     cur = store.data["bot_status"].get(bot_name, {})
     store.update_bot(bot_name, store=store_name,
@@ -301,12 +302,11 @@ def report_security_request(uid, name, username, channel, chat_id=""):
     })
 
 def report_bot_error(bot_name, err_msg):
-    """When bot encounters network error"""
     cur = store.data["bot_status"].get(bot_name, {})
     store.update_bot(bot_name, status="error", last_error=str(err_msg)[:80])
 
 # ============================================================
-# Auth
+# Authentication
 # ============================================================
 def api_key_required(f):
     @wraps(f)
@@ -326,7 +326,7 @@ def login_required(f):
     return w
 
 # ============================================================
-# Routes
+# Web Routes
 # ============================================================
 @app.route("/")
 def index():
@@ -354,7 +354,6 @@ def snapshot():
 
 @app.route("/api/stats")
 def api_stats():
-    """Public stats endpoint for UptimeRobot monitoring"""
     snap = store.snapshot()
     return jsonify({
         "total_scans": snap["total_scans"],
@@ -381,7 +380,7 @@ def stream():
     return Response(gen(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-# --------- Chat ---------
+# --------- AI Chat ---------
 @app.route("/api/chat", methods=["POST"])
 @login_required
 def chat():
@@ -399,7 +398,7 @@ def chat():
     active = sum(1 for b in snap["bot_status"].values() if b.get("status") == "active")
     dead   = sum(1 for b in snap["bot_status"].values() if b.get("status") in ("error","dead"))
 
-    system = f"""You are JARVIS, the AI assistant of Commander Aman Mishra's 21-bot Amazon/Flipkart loot hunting system.
+    system = f"""You are JARVIS, the AI assistant of Commander Aman Mishra's 21-bot Glitch & Loot Deal Empire.
 Current live stats:
 - Total scans: {snap['total_scans']}
 - Loots caught: {snap['loots_found']}
@@ -411,8 +410,8 @@ Current live stats:
 Rules:
 - Reply in Hinglish (Hindi + English mix, Roman script).
 - Short, friendly, helpful.
-- Agar user bot status poochhe to upar ke stats use karo.
-- Max 100 words unless zyada detail maangi jaaye."""
+- Explain glitches, aggregator status, or ASIN monitors if asked.
+- Max 100 words unless more detail is asked."""
 
     convo = system + "\n\n"
     for h in history[-6:]:
@@ -428,7 +427,7 @@ Rules:
         logger.error(f"Chat err: {e}")
         return jsonify({"reply": f"⚠️ AI error: {str(e)[:80]}"}), 200
 
-# --------- Security ---------
+# --------- Security Endpoints ---------
 @app.route("/api/security/approve", methods=["POST"])
 @login_required
 @api_key_required
@@ -480,10 +479,9 @@ def heal_all():
     return jsonify({"ok": True, "healed": healed})
 
 # ============================================================
-# 🛡️ TELEGRAM SENTINEL & RETRY SENDER (PATCH 2)
+# 🛡️ TELEGRAM SENTINEL & SAFE RETRY API
 # ============================================================
 def tg_api(method, payload, retries=4):
-    """Safe Telegram API caller with rate-limit retry & backoff"""
     if not BOT_TOKEN:
         return None
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
@@ -504,12 +502,12 @@ def tg_api(method, payload, retries=4):
             logger.warning(f"TG {method} HTTP {r.status_code}: {r.text[:120]}")
             return None
         except Exception as e:
-            logger.warning(f"TG {method} error attempt {i+1}: {e}")
+            logger.warning(f"TG {method} err attempt {i+1}: {e}")
             time.sleep(2 ** i)
     return None
 
 def send_telegram_deal_alert(deal):
-    """Sends deal with Telegram protect_content & HTML escape protection"""
+    """Sends deal with Telegram protect_content and HTML escape protection"""
     raw_title = str(deal.get('title', 'Unknown'))
     safe_title = html.escape(raw_title)
     safe_mrp = html.escape(str(deal.get('mrp', 'N/A')))
@@ -518,12 +516,20 @@ def send_telegram_deal_alert(deal):
     safe_store = html.escape(str(deal.get('store', 'N/A')))
     deal_url = str(deal.get('url', '#'))
 
+    # Siren header for price glitches (80%+ or extreme drop)
+    is_glitch = "GLITCH" in safe_store.upper() or "GLITCH" in safe_title.upper() or int(re.sub(r'[^\d]', '', safe_disc) or 0) >= 80
+
+    if is_glitch:
+        header = "🚨🚨 <b>MEGA PRICE GLITCH / LOOT ALERT!</b> 🚨🚨\n⚡ <i>Price Error Deal — Hurry! Only for 2-5 Mins!</i> ⚡"
+    else:
+        header = f"🔥 <b>{safe_disc} OFF Mega Deal!</b> 🔥"
+
     msg = (
-        f"🔥 <b>{safe_disc} OFF Mega Loot Deal!</b> 🔥\n\n"
+        f"{header}\n\n"
         f"📦 <b>{safe_title}</b>\n\n"
         f"❌ <b>MRP:</b> {safe_mrp}\n"
         f"💰 <b>Deal Price:</b> {safe_price}\n"
-        f"🏷️ <b>Store:</b> {safe_store}\n\n"
+        f"🏷️ <b>Store / Source:</b> {safe_store}\n\n"
         f"⚡ <b>1-Click Buy Link:</b>\n{deal_url}\n\n"
         f"⚠️ <i>Price kabhi bhi badh sakti hai, jaldi check karein!</i>"
     )
@@ -582,7 +588,6 @@ def telegram_sentinel_daemon():
                         uname = fu.get("username", "")
                         report_security_request(uid, fname, uname, ctitle, cid)
 
-                        # Interactive Telegram buttons to Admin
                         alert = (
                             f"🚨 <b>JARVIS IRON DOME // NEW JOIN REQUEST</b>\n\n"
                             f"👤 <b>Candidate:</b> {html.escape(fname)} (@{html.escape(uname or 'None')})\n"
@@ -622,13 +627,13 @@ def telegram_sentinel_daemon():
                                 store.resolve_security(uid, "declined")
                                 tg_api("answerCallbackQuery", {"callback_query_id": cb_id, "text": "❌ User Declined!"})
             elif resp.status_code == 409:
-                logger.warning("Telegram 409 conflict — another poller is active, backing off 10s")
+                logger.warning("Telegram 409 conflict — backing off 10s")
                 time.sleep(10)
         except Exception as e:
             time.sleep(3)
 
 # ============================================================
-# 🚨 SILENCE WATCHDOG (PATCH 5: Alert if no loot in 1 hour)
+# 🚨 SILENCE WATCHDOG & SELF-PING (Render Free Anti-Sleep)
 # ============================================================
 def silence_watchdog():
     last_alert = 0
@@ -657,8 +662,8 @@ def silence_watchdog():
                         f"Pichle <b>{int(silent_for//60)} min</b> se koi naya loot nahi mila.\n"
                         f"🟢 Active Bots: {active}\n"
                         f"🟠 Blocked/Cooldown: {blocked}\n"
-                        f"🩺 Total Doctor Heals: {snap['doctor']['healing_actions_total']}\n\n"
-                        f"System check automated diagnostic running..."
+                        f"🩺 Total Heals: {snap['doctor']['healing_actions_total']}\n\n"
+                        f"Automated system check in progress..."
                     ),
                     "parse_mode": "HTML"
                 })
@@ -666,11 +671,7 @@ def silence_watchdog():
         except Exception as e:
             logger.error(f"Watchdog err: {e}")
 
-# ============================================================
-# 🔄 SELF-PING WATCHDOG (Render Free Tier Anti-Sleep)
-# ============================================================
 def self_ping_watchdog():
-    """Pings internal stats endpoint every 9 minutes to avoid idle drops"""
     time.sleep(30)
     while True:
         try:
@@ -679,9 +680,9 @@ def self_ping_watchdog():
             pass
         time.sleep(540)
 
-# ==========================================
-# 🛒 21 AUTONOMOUS HUNTER WORKERS (PATCH 2, 3, 6)
-# ==========================================
+# ============================================================
+# ANTI-BLOCK FETCHER & LRU CACHE
+# ============================================================
 BLOCKED_WORDS = ["cover", "case", "tempered glass", "screen protector", "skin", "sticker", "pouch", "disposable", "tissue", "toothpick"]
 
 def is_title_blocked(title):
@@ -694,7 +695,6 @@ def is_title_blocked(title):
             if re.search(r'\b' + re.escape(w) + r'\b', tl): return True
     return False
 
-# Bounded LRU Cache (PATCH 6: Expanded to 20,000 items)
 import collections
 MAX_SEEN = 20000
 seen_products = collections.OrderedDict()
@@ -707,7 +707,6 @@ def is_seen(did):
         if len(seen_products) > MAX_SEEN: seen_products.popitem(last=False)
         return False
 
-# Anti-Block Fetcher with User-Agent & Exponential Backoff
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
@@ -751,75 +750,310 @@ def fetch_page(url, retries=3):
     return None, last_status
 
 # ============================================================
-# WORKER REGISTRY (PATCH 1: Guaranteed 1 thread per bot)
+# BLOCK 1 — AGGREGATOR HUNTERS (Desidime / IndiaFreeStuff / FreeKaaMaal)
 # ============================================================
-BOT_WORKERS = {}
-WORKER_LOCK = threading.Lock()
-
-def stop_bot_worker(name, timeout=3):
-    with WORKER_LOCK:
-        w = BOT_WORKERS.pop(name, None)
-    if not w:
-        return
-    w["stop"].set()
-    try:
-        w["thread"].join(timeout=timeout)
-    except Exception:
-        pass
-
-def start_bot_worker(name):
-    info = HUNTER_TARGETS.get(name)
-    if not info:
-        return
-    stop_bot_worker(name)  # Purana thread band karo pehle!
-    ev = threading.Event()
-    fn = run_amazon_hunter if info["store"] == "Amazon" else run_flipkart_hunter
-    t = threading.Thread(
-        target=fn, args=(name, info["cat"], info["kw"], ev), daemon=True
-    )
-    with WORKER_LOCK:
-        BOT_WORKERS[name] = {"thread": t, "stop": ev}
-    t.start()
-
-# 21 Targets Definition
-HUNTER_TARGETS = {
-    # 11 Amazon Targets
-    "HUNTER-01": {"store": "Amazon", "cat": "Smartphones", "kw": "smartphone 5g 70% off"},
-    "HUNTER-02": {"store": "Amazon", "cat": "Laptops", "kw": "intel core laptop"},
-    "HUNTER-03": {"store": "Amazon", "cat": "Audio", "kw": "wireless bluetooth earbuds"},
-    "HUNTER-04": {"store": "Amazon", "cat": "Smartwatches", "kw": "smartwatch amoled"},
-    "HUNTER-05": {"store": "Amazon", "cat": "Footwear", "kw": "mens running shoes branded"},
-    "HUNTER-06": {"store": "Amazon", "cat": "Kitchen Bartan", "kw": "prestige pressure cooker induction"},
-    "HUNTER-07": {"store": "Amazon", "cat": "Cookware", "kw": "non stick kadai deep fry pan"},
-    "HUNTER-08": {"store": "Amazon", "cat": "Dinner Sets", "kw": "stainless steel dinner set"},
-    "HUNTER-09": {"store": "Amazon", "cat": "Groceries", "kw": "dry fruits almonds walnuts combo"},
-    "HUNTER-10": {"store": "Amazon", "cat": "Smart TV", "kw": "smart tv 4k 43 inch 55 inch"},
-    "HUNTER-11": {"store": "Amazon", "cat": "Fashion", "kw": "branded casual shirt cotton"},
-    # 10 Flipkart Targets
-    "HUNTER-12": {"store": "Flipkart", "cat": "Mobiles", "kw": "mobile phone 5g"},
-    "HUNTER-13": {"store": "Flipkart", "cat": "Laptops", "kw": "gaming laptop"},
-    "HUNTER-14": {"store": "Flipkart", "cat": "Audio", "kw": "true wireless earbuds"},
-    "HUNTER-15": {"store": "Flipkart", "cat": "Smartwatches", "kw": "smart watch"},
-    "HUNTER-16": {"store": "Flipkart", "cat": "Footwear", "kw": "sports shoes men"},
-    "HUNTER-17": {"store": "Flipkart", "cat": "Kitchen", "kw": "electric kettle mixer grinder"},
-    "HUNTER-18": {"store": "Flipkart", "cat": "Cookware", "kw": "pressure cooker combo"},
-    "HUNTER-19": {"store": "Flipkart", "cat": "Televisions", "kw": "smart led tv 43 inch"},
-    "HUNTER-20": {"store": "Flipkart", "cat": "Travel & Bags", "kw": "laptop backpack waterproof"},
-    "HUNTER-21": {"store": "Flipkart", "cat": "Fashion", "kw": "branded casual shirt cotton"}
+AGGREGATOR_SOURCES = {
+    "desidime": {
+        "url": "https://www.desidime.com/new",  # Tested live feed (200 OK)
+        "base": "https://www.desidime.com",
+        "selectors": ["div.c-deal-box", "div.deal-detail", "div[class*='deal']", "div.grid-40", "li.deal"],
+        "title_sels": ["h3", "a.deal-title", "h2", "a[title]"],
+        "price_sels": ["span[class*='price']", "div[class*='price']", "span.deal-price"],
+    },
+    "indiafreestuff": {
+        "url": "https://www.indiafreestuff.in/category/deals",  # Tested live feed
+        "base": "https://www.indiafreestuff.in",
+        "selectors": ["div.deal-box", "div[class*='deal']", "article"],
+        "title_sels": ["h3", "h2", "a[title]"],
+        "price_sels": ["span[class*='price']", "div[class*='price']"],
+    },
+    "freekaamaal": {
+        "url": "https://www.freekaamaal.com/",  # Tested live homepage feed
+        "base": "https://www.freekaamaal.com",
+        "selectors": ["div.deal-box", "div[class*='deal']", "article", "div.col-md-3"],
+        "title_sels": ["h3", "h2", "a[title]"],
+        "price_sels": ["span[class*='price']", "div[class*='price']"],
+    },
 }
 
+def extract_price_from_text(text):
+    if not text: return None
+    m = re.search(r'₹\s*([\d,]+)', text)
+    if not m: return None
+    try:
+        return int(m.group(1).replace(',', ''))
+    except Exception:
+        return None
+
+def extract_discount_from_text(text):
+    if not text: return None
+    m = re.search(r'(\d{1,3})\s*%\s*(?:off|OFF|Off)', text)
+    return int(m.group(1)) if m else None
+
+def run_aggregator_hunter(bot_name, source_key, stop_event=None):
+    """Scrapes latest community crowdsourced deals from Desidime / IFS / FKM"""
+    src = AGGREGATOR_SOURCES.get(source_key)
+    if not src: return
+    logger.info(f"[{bot_name}] Aggregator hunter started: {source_key.upper()}")
+    empty_streak = 0
+    url_dead_count = 0
+
+    while not (stop_event and stop_event.is_set()):
+        try:
+            html_text, status = fetch_page(src["url"])
+
+            # 404 / 410 dead URL detection
+            if status in (404, 410):
+                url_dead_count += 1
+                logger.error(f"[{bot_name}] {source_key} URL DEAD (HTTP {status})")
+                if url_dead_count == 3:
+                    tg_api("sendMessage", {
+                        "chat_id": ADMIN_USER_ID,
+                        "text": (f"🚨 <b>AGGREGATOR URL DEAD</b>\n\n"
+                                 f"Source: <code>{source_key}</code>\n"
+                                 f"URL: {src['url']}\n"
+                                 f"HTTP {status}\n\n"
+                                 f"Kripya naya URL update karein AGGREGATOR_SOURCES mein."),
+                        "parse_mode": "HTML"
+                    })
+                time.sleep(3600)
+                continue
+
+            if html_text is None:
+                report_bot_error(bot_name, f"HTTP {status}")
+                store.update_bot(bot_name, status="blocked")
+                time.sleep(random.randint(120, 240))
+                continue
+
+            report_bot_scan(bot_name, source_key.upper())
+            soup = BeautifulSoup(html_text, "html.parser")
+
+            cards = []
+            for sel in src["selectors"]:
+                cards = soup.select(sel)
+                if cards: break
+
+            # Fallback to product deal links if no card classes matched
+            if not cards:
+                cards = [a.parent for a in soup.find_all("a", href=True) if "/deals/" in a["href"] or "/deal/" in a["href"]]
+
+            if not cards:
+                empty_streak += 1
+                logger.warning(f"[{bot_name}] {source_key}: 0 cards (streak={empty_streak})")
+                if empty_streak >= 5:
+                    empty_streak = 0
+                    time.sleep(300)
+                else:
+                    time.sleep(60)
+                continue
+
+            empty_streak = 0
+            found = 0
+
+            for card in cards[:35]:
+                if stop_event and stop_event.is_set():
+                    return
+                try:
+                    card_text = card.get_text(" ", strip=True)
+
+                    # Extract title
+                    title = ""
+                    for ts in src["title_sels"]:
+                        el = card.select_one(ts)
+                        if el and el.get_text(strip=True):
+                            title = el.get_text(strip=True)
+                            break
+                    if not title or len(title) < 8:
+                        continue
+
+                    # Discount detection
+                    discount = extract_discount_from_text(card_text)
+                    is_loot_keyword = any(w in card_text.lower() for w in ["[loot]", "price error", "glitch", "freebie", "steal deal", "bug deal"])
+
+                    # If not explicitly high discount and not tagged as loot, skip
+                    if not is_loot_keyword and (not discount or discount < 70):
+                        continue
+
+                    # Extract destination or deal link
+                    le = card.find("a", href=True)
+                    if not le: continue
+                    href = le["href"]
+                    if href.startswith("/"):
+                        url_p = src["base"] + href
+                    elif href.startswith("http"):
+                        url_p = href
+                    else:
+                        continue
+
+                    # Extract price if available
+                    price_val = extract_price_from_text(card_text)
+                    price_str = f"₹{price_val:,}" if price_val else "Deal Page Check"
+
+                    did = f"{source_key}:{hash(title + str(discount or 0))}"
+                    if is_seen(did):
+                        continue
+
+                    loot = {
+                        "title": title[:140],
+                        "price": price_str,
+                        "mrp": "Hot Deal",
+                        "discount": f"{discount}%" if discount else "🔥 MEGA LOOT",
+                        "url": url_p,
+                        "store": source_key.upper(),
+                    }
+                    report_loot(bot_name, loot)
+                    send_telegram_deal_alert(loot)
+                    found += 1
+                except Exception:
+                    pass
+
+            if found:
+                logger.info(f"[{bot_name}] {source_key}: {found} new deals posted!")
+
+        except Exception as e:
+            report_bot_error(bot_name, e)
+            logger.exception(f"{bot_name} agg err")
+
+        # Cycle wait 60-120 seconds
+        for _ in range(random.randint(60, 120)):
+            if stop_event and stop_event.is_set():
+                return
+            time.sleep(1)
+
+# ============================================================
+# BLOCK 2 — ASIN WATCHER (High-Value Direct PDP Monitor)
+# ============================================================
+WATCH_ASINS = [
+    # Top Smartphones (iPhones & Flagships)
+    "B0CHX1W1XY", "B0CHX2F5QT", "B0CHX3QBCH", "B0CHX1W1Z9", "B0CS5XW6XX", "B0CS5V8YR8", "B0FMDLD86P", "B0CQRSDDZ4",
+    # Gaming & Consoles (PS5, Xbox, Controllers)
+    "B0CY5QW896", "B0BCNKKZ91", "B08H99BPJN", "B08K3S6WJM", "B0C2XRN5RT",
+    # Audio Flagships (Sony, Bose, Apple)
+    "B08L5PBFV8", "B0CCZ26B5V", "B09XS7JWHH", "B0BXYCS74H",
+    # MacBooks & Premium Laptops
+    "B0BSHF7WHW", "B0C1JTVQ92", "B0BVD8MTW2",
+    # Smart TVs & 4K Monitors
+    "B0C3WXHBZW", "B0BDHWDR12", "B0BMW7P8TW", "B09Q5N4VBM", "B0BLW4F6BM",
+    # Premium Wearables & Tablets
+    "B0CHX3QBCH", "B0CQKJ7X3F", "B0CZ2GFBW3"
+]
+
+def run_asin_watcher(bot_name, asin_list, stop_event=None):
+    """Directly monitors high-value ASIN product pages for sudden price drops & glitches"""
+    logger.info(f"[{bot_name}] ASIN watcher active for {len(asin_list)} products")
+    consecutive_blocked = 0
+
+    while not (stop_event and stop_event.is_set()):
+        for asin in asin_list:
+            if stop_event and stop_event.is_set():
+                return
+            try:
+                url = f"https://www.amazon.in/dp/{asin}"
+                html_text, status = fetch_page(url, retries=2)
+
+                if html_text is None:
+                    consecutive_blocked += 1
+                    if consecutive_blocked >= 5:
+                        logger.warning(f"[{bot_name}] Amazon rate-limiting — cooldown 5min")
+                        time.sleep(300)
+                        consecutive_blocked = 0
+                    time.sleep(random.randint(15, 30))
+                    continue
+
+                consecutive_blocked = 0
+                report_bot_scan(bot_name, "AMAZON-ASIN")
+                soup = BeautifulSoup(html_text, "html.parser")
+
+                title_el = soup.find("span", {"id": "productTitle"}) or soup.find("h1", {"id": "title"})
+                title = title_el.get_text(strip=True) if title_el else asin
+
+                # Current Price
+                price = None
+                for psel in [
+                    soup.find("span", {"class": "a-price-whole"}),
+                    soup.find("span", {"class": "priceToPay"}),
+                    soup.find("span", {"id": "priceblock_ourprice"}),
+                ]:
+                    if psel:
+                        txt = re.sub(r'[^\d]', '', psel.get_text())
+                        if txt:
+                            price = int(txt)
+                            break
+
+                if not price:
+                    continue
+
+                # MRP (using a-offscreen to avoid double text bug)
+                mrp = None
+                mrp_el = soup.find("span", {"class": "a-price a-text-price"}) or soup.find("span", {"class": "basisPrice"})
+                if mrp_el:
+                    off = mrp_el.find("span", class_="a-offscreen")
+                    txt = re.sub(r'[^\d]', '', off.text if off else mrp_el.text)
+                    if txt:
+                        mrp = int(txt)
+
+                if not mrp or mrp <= price:
+                    continue
+
+                discount = int(round(((mrp - price) / mrp) * 100))
+
+                # 🔥 GLITCH DETECTION: 80%+ discount OR high ticket item under 2000
+                is_glitch = (discount >= 80) or (mrp >= 15000 and price <= 1999) or (mrp >= 5000 and price <= 499)
+
+                if is_glitch:
+                    did = f"glitch:{asin}:{price}"
+                    if is_seen(did): continue
+                    loot = {
+                        "title": f"🚨 GLITCH: {title[:120]}",
+                        "price": f"₹{price:,}",
+                        "mrp": f"₹{mrp:,}",
+                        "discount": f"{discount}%",
+                        "url": url,
+                        "store": "AMAZON-GLITCH",
+                    }
+                    report_loot(bot_name, loot)
+                    send_telegram_deal_alert(loot)
+                    logger.warning(f"🚨 [GLITCH ALERT] {asin} at ₹{price} (MRP ₹{mrp})")
+
+                elif discount >= MIN_DISCOUNT_PERCENT:
+                    did = f"asin:{asin}:{price}"
+                    if is_seen(did): continue
+                    loot = {
+                        "title": title[:140],
+                        "price": f"₹{price:,}",
+                        "mrp": f"₹{mrp:,}",
+                        "discount": f"{discount}%",
+                        "url": url,
+                        "store": "AMAZON-WATCH",
+                    }
+                    report_loot(bot_name, loot)
+                    send_telegram_deal_alert(loot)
+
+            except Exception as e:
+                logger.warning(f"[{bot_name}] ASIN {asin} err: {e}")
+
+            time.sleep(random.randint(8, 16))
+
+        # Cycle wait between product batches
+        for _ in range(random.randint(30, 60)):
+            if stop_event and stop_event.is_set():
+                return
+            time.sleep(1)
+
+# ============================================================
+# SEARCH HUNTERS (Amazon & Flipkart Category Hunters)
+# ============================================================
 def run_amazon_hunter(bot_name, cat, kw, stop_event=None):
     base_kw = kw.replace(' ', '+')
     SORT_VARIANTS = ["", "&s=review-rank", "&s=price-asc-rank", "&s=date-desc-rank"]
     empty_streak = 0
     blocked_until = 0
-    logger.info(f"[{bot_name}] Amazon hunter active ({cat})")
+    logger.info(f"[{bot_name}] Amazon category hunter active ({cat})")
 
     while not (stop_event and stop_event.is_set()):
         try:
             if time.time() < blocked_until:
-                time.sleep(5)
-                continue
+                time.sleep(5); continue
 
             extra = random.choice(SORT_VARIANTS)
             url = f"https://www.amazon.in/s?k={base_kw}{extra}"
@@ -831,25 +1065,20 @@ def run_amazon_hunter(bot_name, cat, kw, stop_event=None):
                 blocked_until = time.time() + random.randint(120, 300)
                 continue
 
-            # Heartbeat ONLY on successful fetch
             report_bot_scan(bot_name, "Amazon")
-
             soup = BeautifulSoup(html_text, "html.parser")
             items = soup.find_all('div', {'data-component-type': 's-search-result'})
 
             if not items:
                 empty_streak += 1
-                logger.info(f"[{bot_name}] 0 items on Amazon (streak={empty_streak})")
                 if empty_streak >= 3:
                     blocked_until = time.time() + random.randint(180, 360)
                     empty_streak = 0
-                    logger.warning(f"[{bot_name}] soft-block detected — cooldown 3-6 min")
             else:
                 empty_streak = 0
 
             for it in items:
-                if stop_event and stop_event.is_set():
-                    return
+                if stop_event and stop_event.is_set(): return
                 try:
                     h2 = it.find('h2')
                     if not h2: continue
@@ -891,13 +1120,10 @@ def run_amazon_hunter(bot_name, cat, kw, stop_event=None):
 
         except Exception as e:
             report_bot_error(bot_name, e)
-            logger.exception(f"{bot_name} loop err")
             time.sleep(10)
 
-        # Interruptible sleep
         for _ in range(random.randint(25, 45)):
-            if stop_event and stop_event.is_set():
-                return
+            if stop_event and stop_event.is_set(): return
             time.sleep(1)
 
 def run_flipkart_hunter(bot_name, cat, kw, stop_event=None):
@@ -905,13 +1131,12 @@ def run_flipkart_hunter(bot_name, cat, kw, stop_event=None):
     SORT_VARIANTS = ["", "&sort=popularity", "&sort=price_asc"]
     empty_streak = 0
     blocked_until = 0
-    logger.info(f"[{bot_name}] Flipkart hunter active ({cat})")
+    logger.info(f"[{bot_name}] Flipkart category hunter active ({cat})")
 
     while not (stop_event and stop_event.is_set()):
         try:
             if time.time() < blocked_until:
-                time.sleep(5)
-                continue
+                time.sleep(5); continue
 
             extra = random.choice(SORT_VARIANTS)
             url = f"https://www.flipkart.com/search?q={base_kw}{extra}"
@@ -924,14 +1149,11 @@ def run_flipkart_hunter(bot_name, cat, kw, stop_event=None):
                 continue
 
             report_bot_scan(bot_name, "Flipkart")
-
             soup = BeautifulSoup(html_text, "html.parser")
-            # Modern + Legacy Flipkart class selectors
             cards = soup.find_all('div', class_=re.compile(r'tUxRFH|_1AtVbE|slAVV4|cPHDOP|_75nlfW|RGLWAk|row'))
 
             if not cards:
                 empty_streak += 1
-                logger.info(f"[{bot_name}] 0 cards on Flipkart (streak={empty_streak})")
                 if empty_streak >= 3:
                     blocked_until = time.time() + random.randint(180, 360)
                     empty_streak = 0
@@ -939,8 +1161,7 @@ def run_flipkart_hunter(bot_name, cat, kw, stop_event=None):
                 empty_streak = 0
 
             for c in cards:
-                if stop_event and stop_event.is_set():
-                    return
+                if stop_event and stop_event.is_set(): return
                 try:
                     te = c.find('div', class_=re.compile(r'KzDlHZ|wjcEIp|_4rR01T|s1Q9rs')) or c.find('a', class_=re.compile(r'IRpwTa|WKTcLC'))
                     if not te: continue
@@ -981,37 +1202,104 @@ def run_flipkart_hunter(bot_name, cat, kw, stop_event=None):
 
         except Exception as e:
             report_bot_error(bot_name, e)
-            logger.exception(f"{bot_name} loop err")
             time.sleep(10)
 
         for _ in range(random.randint(25, 45)):
-            if stop_event and stop_event.is_set():
-                return
+            if stop_event and stop_event.is_set(): return
             time.sleep(1)
 
+# ============================================================
+# BLOCK 3 — 21 BOTS HYBRID FLEET DEFINITION
+# ============================================================
+HUNTER_TARGETS = {
+    # === TEAM A: Aggregator Scrapers (5 bots) ===
+    "HUNTER-01": {"type": "aggregator", "source": "desidime"},
+    "HUNTER-02": {"type": "aggregator", "source": "desidime"},
+    "HUNTER-03": {"type": "aggregator", "source": "indiafreestuff"},
+    "HUNTER-04": {"type": "aggregator", "source": "indiafreestuff"},
+    "HUNTER-05": {"type": "aggregator", "source": "freekaamaal"},
+
+    # === TEAM B: ASIN Watchers (10 bots) ===
+    "HUNTER-06": {"type": "asin", "slice": (0, 3)},
+    "HUNTER-07": {"type": "asin", "slice": (3, 6)},
+    "HUNTER-08": {"type": "asin", "slice": (6, 9)},
+    "HUNTER-09": {"type": "asin", "slice": (9, 12)},
+    "HUNTER-10": {"type": "asin", "slice": (12, 15)},
+    "HUNTER-11": {"type": "asin", "slice": (15, 18)},
+    "HUNTER-12": {"type": "asin", "slice": (18, 21)},
+    "HUNTER-13": {"type": "asin", "slice": (21, 24)},
+    "HUNTER-14": {"type": "asin", "slice": (24, 27)},
+    "HUNTER-15": {"type": "asin", "slice": (27, 30)},
+
+    # === TEAM C: Search-page Hunters (6 bots) ===
+    "HUNTER-16": {"type": "search", "store": "Amazon", "cat": "Smartphones", "kw": "smartphone 5g"},
+    "HUNTER-17": {"type": "search", "store": "Amazon", "cat": "Laptops", "kw": "intel core laptop"},
+    "HUNTER-18": {"type": "search", "store": "Amazon", "cat": "Audio", "kw": "wireless earbuds"},
+    "HUNTER-19": {"type": "search", "store": "Flipkart", "cat": "Mobiles", "kw": "mobile 5g"},
+    "HUNTER-20": {"type": "search", "store": "Flipkart", "cat": "Audio", "kw": "twc earbuds"},
+    "HUNTER-21": {"type": "search", "store": "Flipkart", "cat": "Fashion", "kw": "branded shirt"},
+}
+
+# ============================================================
+# BLOCK 4 — WORKER REGISTRY & DISPATCHER
+# ============================================================
+BOT_WORKERS = {}
+WORKER_LOCK = threading.Lock()
+
+def stop_bot_worker(name, timeout=3):
+    with WORKER_LOCK:
+        w = BOT_WORKERS.pop(name, None)
+    if not w: return
+    w["stop"].set()
+    try:
+        w["thread"].join(timeout=timeout)
+    except Exception:
+        pass
+
+def start_bot_worker(name):
+    info = HUNTER_TARGETS.get(name)
+    if not info: return
+    stop_bot_worker(name)
+    ev = threading.Event()
+    btype = info.get("type", "search")
+
+    if btype == "aggregator":
+        target_fn = run_aggregator_hunter
+        args = (name, info["source"], ev)
+    elif btype == "asin":
+        s, e = info["slice"]
+        asin_slice = WATCH_ASINS[s:e]
+        target_fn = run_asin_watcher
+        args = (name, asin_slice, ev)
+    else:  # Search category
+        target_fn = run_amazon_hunter if info["store"] == "Amazon" else run_flipkart_hunter
+        args = (name, info["cat"], info["kw"], ev)
+
+    t = threading.Thread(target=target_fn, args=args, daemon=True)
+    with WORKER_LOCK:
+        BOT_WORKERS[name] = {"thread": t, "stop": ev}
+    t.start()
+
 def start_fleet_and_sentinel():
-    """Starts Telegram Sentinel and 21 Autonomous Hunter Bots via Worker Registry"""
     logger.info("🚀 Starting Telegram Sentinel Daemon...")
     threading.Thread(target=telegram_sentinel_daemon, daemon=True).start()
 
     logger.info("🚀 Starting Silence Watchdog Daemon...")
     threading.Thread(target=silence_watchdog, daemon=True).start()
 
-    logger.info("🚀 Starting Internal Self-Ping Keep-Alive...")
+    logger.info("🚀 Starting Anti-Sleep Keep-Alive...")
     threading.Thread(target=self_ping_watchdog, daemon=True).start()
 
-    logger.info("🚀 Launching 21 Autonomous Hunter Bots cleanly...")
+    logger.info("🚀 Launching 3-Tier 21-Bot Hybrid Glitch Fleet...")
     for bot_name in HUNTER_TARGETS.keys():
         start_bot_worker(bot_name)
         time.sleep(0.3)
-    logger.info("✅ All 21 Autonomous Bots are hunting in parallel without duplicates!")
+    logger.info("✅ All 21 Hybrid Bots hunting in parallel!")
 
-# Auto-start engines once on app load with Cross-Platform Lock
 _engine_started = False
 _engine_lock = threading.Lock()
 
 def _acquire_engine_lock():
-    """Ensures only 1 master process runs bot workers (handles multi-worker gunicorn)."""
     try:
         import fcntl
         import atexit
@@ -1020,10 +1308,9 @@ def _acquire_engine_lock():
         atexit.register(lambda: f.close())
         return f
     except (ImportError, ModuleNotFoundError):
-        # On Windows development
         return True
     except Exception as e:
-        logger.warning(f"Engine lock not acquired: {e}")
+        logger.warning(f"Engine lock: {e}")
         return None
 
 def ensure_engines_started():
@@ -1037,9 +1324,9 @@ _engine_lock_fd = _acquire_engine_lock()
 if _engine_lock_fd:
     ensure_engines_started()
 else:
-    logger.warning("Another worker owns engines — this process serves HTTP only.")
+    logger.warning("Another worker owns engines — HTTP serving only.")
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
-    logger.info(f"🌐 [JARVIS DASHBOARD] Starting on http://0.0.0.0:{port}")
+    logger.info(f"🌐 [JARVIS GLITCH EMPIRE] Starting on http://0.0.0.0:{port}")
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

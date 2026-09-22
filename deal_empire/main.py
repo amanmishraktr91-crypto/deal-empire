@@ -5,6 +5,7 @@ import os
 import sys
 
 # Import everything from dashboard_server
+import dashboard_server
 from dashboard_server import app, ensure_engines_started
 
 # Ensure worker fleet and sentinel are active
